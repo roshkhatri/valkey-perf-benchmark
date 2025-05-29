@@ -1,0 +1,12 @@
+[
+    {
+      "requests": [10000000],
+      "keyspacelen": [10000000],
+      "data_sizes": [16],
+      "pipelines": [10],
+      "commands": ["SET"],
+      "cluster_modes": ["no"],
+      "tls_modes": ["no"],
+      "warmup": [10]
+    }
+  ]
