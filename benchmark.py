@@ -50,10 +50,7 @@ def run_pipeline(commit_id, config, mode, target_ip):
     tls_modes=config.get("tls_modes")
     for tls_mode in tls_modes: 
         builder = ServerBuilder(commit_id=commit_id, tls_mode=tls_mode)
-        if builder.check_if_built():
-            valkey_path = builder.get_valkey_path()
-        else:
-            valkey_path = builder.checkout_and_build()
+        valkey_path = builder.checkout_and_build()
 
         cluster_modes = config.get("cluster_modes")
         for cluster_mode in cluster_modes:

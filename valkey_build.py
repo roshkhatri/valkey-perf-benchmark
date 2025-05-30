@@ -51,19 +51,19 @@ class ServerBuilder:
         self.build(tls_mode=self.tls_mode)
         return self.valkey_dir
     
-    def check_if_built(self):
-        Logger.info(f"Checking if Valkey build exists at {self.valkey_dir}")
-        if not self.valkey_dir.exists():
-            return False
-        if not (self.valkey_dir / "src" / "valkey-server").exists():
-            return False
-        if not (self.valkey_dir / "src" / "valkey-cli").exists():
-            return False
-        if not (self.valkey_dir / "src" / "valkey-benchmark").exists():
-            return False
-        return True
+    # def check_if_built(self):
+    #     Logger.info(f"Checking if Valkey build exists at {self.valkey_dir}")
+    #     if not self.valkey_dir.exists():
+    #         return False
+    #     if not (self.valkey_dir / "src" / "valkey-server").exists():
+    #         return False
+    #     if not (self.valkey_dir / "src" / "valkey-cli").exists():
+    #         return False
+    #     if not (self.valkey_dir / "src" / "valkey-benchmark").exists():
+    #         return False
+    #     return True
     
-    def get_valkey_path(self):
-        if not self.check_if_built():
-            raise FileNotFoundError(f"Valkey build not found at {self.valkey_dir}")
-        return str(self.valkey_dir)
+    # def get_valkey_path(self):
+    #     if not self.check_if_built():
+    #         raise FileNotFoundError(f"Valkey build not found at {self.valkey_dir}")
+    #     return str(self.valkey_dir)
