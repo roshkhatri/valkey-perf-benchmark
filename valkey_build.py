@@ -25,7 +25,7 @@ class ServerBuilder:
         if self.valkey_dir.exists():
             Logger.info(f"Using existing directory: {self.valkey_dir}")
             if self.commit_id == "unstable":
-                Logger.info(f"Checking out commit unstable")
+                Logger.info(f"Checking out unstable")
                 self._run(["git", "checkout", self.commit_id], cwd=self.valkey_dir)
             return
 
