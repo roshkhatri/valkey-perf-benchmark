@@ -1,7 +1,5 @@
 import argparse
 import json
-import os
-import sys
 from pathlib import Path
 from itertools import product
 
@@ -46,8 +44,8 @@ def ensure_results_dir(commit_id):
 
 
 def run_pipeline(commit_id, config, mode, target_ip):
-    result_dir = ensure_results_dir(commit_id)
-    Logger.init_logging(result_dir / "logs.txt")
+    results_dir = ensure_results_dir(commit_id)
+    Logger.init_logging(results_dir / "logs.txt")
 
     tls_modes=config.get("tls_modes")
     for tls_mode in tls_modes: 
@@ -75,7 +73,7 @@ def run_pipeline(commit_id, config, mode, target_ip):
                     cluster_mode=cluster_mode,
                     tls_mode = tls_mode,
                     target_ip=target_ip,
-                    output_dir=result_dir,
+                    results_dir=results_dir,
                     valkey_path=valkey_path
                 )
                 runner.ping_server()

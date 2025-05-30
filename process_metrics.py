@@ -1,8 +1,9 @@
-from datetime import datetime
+import json
+import time
 from logger import Logger
 
 
-class MetricParser:
+class MetricsProcessor:
     def __init__(self, commit_id, cluster_mode, tls_mode):
         self.commit_id = commit_id
         self.cluster_mode = cluster_mode
@@ -29,7 +30,7 @@ class MetricParser:
         data = dict(zip(labels, values))
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "commit": self.commit_id,
             "command": command,
             "data_size": int(data_size),
@@ -44,3 +45,25 @@ class MetricParser:
             "cluster_mode": self.cluster_mode,
             "tls": self.tls_mode
         }
+
+    def write_metrics(self, results_dir, new_metrics):
+        """
+        Writes metrics to JSON file.
+        """
+        metrics_file = results_dir / "metrics.json"
+        metrics = []
+
+        if metrics_file.exists() and metrics_file.stat().st_size > 0:
+            try:
+                with metrics_file.open("r", encoding="utf-8") as f:
+                    metrics = json.load(f)
+            except json.JSONDecodeError:
+                Logger.warning(f"Could not decode JSON from {metrics_file}, starting fresh.")
+
+        # Extend metrics with new_metrics as it's a list.
+        metrics.extend(new_metrics)
+
+        with metrics_file.open("w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=4)
+
+        Logger.info(f"Metrics written to {metrics_file}")

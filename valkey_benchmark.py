@@ -3,7 +3,7 @@ import time
 import json
 import os
 from itertools import product
-from process_metrics import MetricParser
+from process_metrics import MetricsProcessor
 from cleanup_server import ServerCleaner
 from logger import Logger
 
@@ -11,13 +11,13 @@ VALKEY_CLI = "src/valkey-cli"
 VALKEY_BENCHMARK = "src/valkey-benchmark"
 
 class ClientRunner:
-    def __init__(self, commit_id, config, cluster_mode, tls_mode, target_ip, output_dir, valkey_path):
+    def __init__(self, commit_id, config, cluster_mode, tls_mode, target_ip, results_dir, valkey_path):
         self.commit_id = commit_id
         self.config = config
         self.cluster_mode = True if cluster_mode == "yes" else False
         self.tls_mode = True if tls_mode == "yes" else False
         self.target_ip = target_ip
-        self.output_dir = output_dir
+        self.results_dir = results_dir
         self.valkey_path = valkey_path
         self.valkey_cli = f"{self.valkey_path}/{VALKEY_CLI}"
         self.valkey_benchmark = f"{self.valkey_path}/{VALKEY_BENCHMARK}"
@@ -43,10 +43,10 @@ class ClientRunner:
 
     def run_all(self):
         combinations = self._generate_combinations()
-        results = []
+        metrics_processor = MetricsProcessor(self.commit_id, self.cluster_mode, self.tls_mode)
+        metric_json = []
 
         Logger.info(f"=== Starting benchmark: TLS={self.tls_mode}, Cluster={self.cluster_mode} ===")
-
         for (requests, keyspacelen, data_size, pipeline, command, warmup) in combinations:
             Logger.info(f"--> Running {command} with data size {data_size}, pipeline {pipeline}")
             Logger.info(f"requests: {requests}, keyspacelen: {keyspacelen}, data_size: {data_size}, pipeline: {pipeline}, warmup: {warmup}")
@@ -80,12 +80,11 @@ class ClientRunner:
                 Logger.info(f"Benchmark output:\n{proc.stdout}")
                 if proc.stderr:
                     Logger.warning(f"Benchmark stderr:\n{proc.stderr}")
-                    
-                parser = MetricParser(self.commit_id, self.cluster_mode, self.tls_mode)
-                metrics = parser.parse_csv_output(proc.stdout, command, data_size, pipeline)
+
+                metrics = metrics_processor.parse_csv_output(proc.stdout, command, data_size, pipeline)
                 Logger.info(f"Benchmark completed: {metrics}")
                 if metrics:
-                    results.append(metrics)
+                    metric_json.append(metrics)
             except subprocess.CalledProcessError as e:
                 Logger.error(f"Benchmark failed: {e}")
                 if e.stdout:
@@ -93,7 +92,12 @@ class ClientRunner:
                 if e.stderr:
                     Logger.error(f"Benchmark stderr:\n{e.stderr}")
 
-        self._write_metrics(results)
+        # in case no benchmarks ran successfully)
+        if not metric_json:
+            Logger.warning("No metrics collected, skipping metrics write")
+            return
+            
+        metrics_processor.write_metrics(self.results_dir, metric_json)
 
     def _generate_combinations(self):
         return list(product(
@@ -131,10 +135,3 @@ class ClientRunner:
             Logger.error(f"Command failed with error: {e}")
         except Exception as e:
             Logger.error(f"An error occurred: {e}")
-
-
-    def _write_metrics(self, results):
-        metrics_path = os.path.join(self.output_dir, "metrics.json")
-        with open(metrics_path, "w") as f:
-            json.dump(results, f, indent=2)
-        Logger.info(f"Metrics written to {metrics_path}")
