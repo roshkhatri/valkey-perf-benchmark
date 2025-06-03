@@ -1,97 +1,166 @@
+#!/usr/bin/env python3
 import argparse
 import json
-from pathlib import Path
+import os
+import logging
 from itertools import product
+from pathlib import Path
+from typing import List
 
 from logger import Logger
-from valkey_benchmark import ClientRunner
 from valkey_build import ServerBuilder
 from valkey_server import ServerLauncher
+from valkey_benchmark import ClientRunner
 from cleanup_server import ServerCleaner
 
-RESULTS_DIR = Path("results")
-REQUIRED_KEYS = ["requests", "keyspacelen", "data_sizes", "pipelines", "commands", "cluster_modes", "tls_modes", "warmup"]
+# ---------- Constants --------------------------------------------------------
+DEFAULT_RESULTS_ROOT = Path("results")
+REQUIRED_KEYS = [
+    "requests",
+    "keyspacelen",
+    "data_sizes",
+    "pipelines",
+    "commands",
+    "cluster_modes",
+    "tls_modes",
+    "warmup",
+]
 
-
+# ---------- CLI --------------------------------------------------------------
 def parse_args():
-    parser = argparse.ArgumentParser(description="Valkey Benchmarking Tool")
-    parser.add_argument("--mode", choices=["server", "client", "both", "pr"], default="both")
-    parser.add_argument("--commit", default="unstable")
-    parser.add_argument("--target_ip", default="127.0.0.1", help="Only needed for client mode")
-    parser.add_argument("--config", default="./configs/benchmark-configs.json")
-    return parser.parse_args()
+    parser = argparse.ArgumentParser(description="Valkey Benchmarking Tool", allow_abbrev=False)
+    
+    parser.add_argument("--mode",
+                   choices=["server", "client", "both"],
+                   default="both",
+                   help="Where to run: only server setup, only client tests, or both on one host.")
+    parser.add_argument("--commits",
+                   nargs="+",
+                   default=["HEAD"],
+                   metavar="COMMITS",
+                   help="Git SHA(s) or ref(s) to benchmark (default: HEAD).")
+    parser.add_argument(
+                    "--valkey-path",
+                    type=Path,
+                    default="../valkey",
+                    metavar="PATH",
+                    help="Use this pre-built Valkey directory instead of building from source.")
+    parser.add_argument("--baseline",
+                   default=None,
+                   metavar="REF",
+                   help="Extra commit to include for comparison (e.g. 'unstable').")
+    parser.add_argument(
+                    "--use-running-server",
+                    action="store_true",
+                    help="Assumes the Valkey servers are already running; "
+                        "skip build / launch / cleanup steps.")
+    parser.add_argument("--target-ip",
+                   default="127.0.0.1",
+                   help="Server IP visible to the client (ignored for --mode=server).")
+    parser.add_argument("--config",
+                   default="./configs/benchmark-configs.json",
+                   help="Path to benchmark-configs.json.")
+    parser.add_argument("--results-dir",
+                   type=Path,
+                   default=DEFAULT_RESULTS_ROOT,
+                   help="Root folder for benchmark outputs.")
+    parser.add_argument("--log-level",
+                   default="INFO",
+                   choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        parser.error(f"Unrecognized arguments: {' '.join(unknown)}")
+    return args
 
 
-def validate_config(config):
-    for key in REQUIRED_KEYS:
-        if key not in config:
-            raise ValueError(f"Missing required config key: {key}")
+# ---------- Helpers ----------------------------------------------------------
+def validate_config(cfg: dict) -> None:
+    for k in REQUIRED_KEYS:
+        if k not in cfg:
+            raise ValueError(f"Missing required config key: {k}")
+
+def load_configs(path: str) -> List[dict]:
+    with open(path, "r") as fp:
+        configs = json.load(fp)
+    for c in configs:
+        validate_config(c)
+    return configs
+
+def ensure_results_dir(root: Path, commit_id: str) -> Path:
+    d = root / commit_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
-def load_config(config_path):
-    with open(config_path, "r") as f:
-        configs = json.load(f)
-        for config in configs:
-            validate_config(config)
-        
-        return configs
-
-
-def ensure_results_dir(commit_id):
-    commit_results_path = RESULTS_DIR / commit_id
-    commit_results_path.mkdir(parents=True, exist_ok=True)
-    return commit_results_path
-
-
-def run_pipeline(commit_id, config, mode, target_ip):
-    results_dir = ensure_results_dir(commit_id)
+def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
+    results_dir = ensure_results_dir(args.results_dir, commit_id)
     Logger.init_logging(results_dir / "logs.txt")
+    logging.getLogger().setLevel(args.log_level)
 
-    tls_modes=config.get("tls_modes")
-    for tls_mode in tls_modes: 
-        builder = ServerBuilder(commit_id=commit_id, tls_mode=tls_mode)
-        valkey_path = builder.checkout_and_build()
+    for tls_mode in cfg["tls_modes"]:
+        builder = ServerBuilder(commit_id=commit_id, tls_mode=tls_mode, 
+                                        valkey_path=args.valkey_path)
+        if not args.use_running_server:
+            valkey_path = builder.build()
+        else:
+            Logger.info("Using pre-built Valkey instance.")
 
-        cluster_modes = config.get("cluster_modes")
-        for cluster_mode in cluster_modes:
-            Logger.info(f"Running benchmark with Cluster Mode {'enabled' if (cluster_mode == 'yes') else 'disabled'} and TLS {'enabled' if (tls_mode == 'yes') else 'disabled'}")
-
-            if mode in ("server", "both", "pr"):
-                launcher = ServerLauncher(commit_id=commit_id, valkey_path=valkey_path)
+        for cluster_mode in cfg["cluster_modes"]:
+            Logger.info(
+                f"Commit {commit_id[:10]} | "
+                f"TLS={'on' if tls_mode == 'yes' else 'off'} | "
+                f"Cluster={'on' if cluster_mode == 'yes' else 'off'}"
+            )
+            # ---- server side -----------------
+            if (not args.use_running_server) and args.mode in ("server", "both"):
+                launcher = ServerLauncher(
+                    commit_id=commit_id, valkey_path=valkey_path
+                )
                 launcher.launch_all_servers(
                     cluster_mode=cluster_mode,
-                    tls_mode = tls_mode
+                    tls_mode=tls_mode,
                 )
 
-            if mode in ("client", "both", "pr"):
+
+            if args.mode in ("client", "both"):
                 runner = ClientRunner(
                     commit_id=commit_id,
-                    config=config,
+                    config=cfg,
                     cluster_mode=cluster_mode,
-                    tls_mode = tls_mode,
-                    target_ip=target_ip,
+                    tls_mode=tls_mode,
+                    target_ip=args.target_ip,
                     results_dir=results_dir,
-                    valkey_path=valkey_path
+                    valkey_path=valkey_path,
                 )
                 runner.ping_server()
-                runner.run_all()
-            
-            ServerCleaner.kill_valkey_servers()
+                runner.run_benchmark_config()
 
+                # ---- clean up --------------------------------------------------
+                ServerCleaner.kill_valkey_servers()
 
-def main():
+# ---------- Entry point ------------------------------------------------------
+def main() -> None:
     args = parse_args()
 
-    for config in load_config(args.config):
-        Logger.info(f"Running benchmark with config: {config}")
-        commit_ids = [args.commit] if args.mode != "pr" else ["pr", "unstable"]
-        for commit_id in commit_ids:
-            run_pipeline(
-                commit_id=commit_id,
-                config=config,
-                mode=args.mode,
-                target_ip=args.target_ip,
+    if args.use_running_server and args.mode in ("server", "both"):
+            Logger.error(
+                "ERROR: --use-running-server implies the valkey is already build and running, "
+                "so --mode must be 'client'."
             )
+    print(args)
+
+    commits = args.commits.copy()
+    if args.baseline and args.baseline not in commits:
+        commits.append(args.baseline)
+
+    for cfg in load_configs(args.config):
+        Logger.info(f"Loaded config: {cfg}")
+        for commit in commits:
+            run_benchmark_matrix(commit_id=commit, cfg=cfg, args=args)
+            
+    if args.baseline:
+        Logger.info("Pending implement baseline comparison.")
 
 if __name__ == "__main__":
     main()

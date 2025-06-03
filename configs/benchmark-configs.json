@@ -4,7 +4,7 @@
       "keyspacelen": [10000000],
       "data_sizes": [16],
       "pipelines": [10],
-      "commands": ["SET"],
+      "commands": ["SET", "GET", "RPUSH", "LPUSH", "LPOP", "SADD", "SPOP", "HSET"],
       "cluster_modes": ["no"],
       "tls_modes": ["no"],
       "warmup": [10]

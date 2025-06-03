@@ -46,21 +46,34 @@ python benchmark.py
 python benchmark.py --mode server
 
 # Run only the client component against a specific server
-python benchmark.py --mode client --target_ip 192.168.1.100
+python benchmark.py --mode client --target-ip 192.168.1.100
 
 # Use a specific configuration file
 python benchmark.py --config ./configs/my-custom-config.json
 
 # Benchmark a specific commit
-python benchmark.py --commit 1a2b3c4d
+python benchmark.py --commits 1a2b3c4d
+
+# Use a pre-existing Valkey dir
+python benchmark.py --valkey-path /path/to/valkey
+
+### Comparison Mode
+
+# Compare with baseline
+python benchmark.py --commits HEAD --baseline unstable
 ```
 
-### PR Comparison Mode
-
-Compare performance between your local PR changes and the unstable branch:
+### Advanced Options
 
 ```bash
-python benchmark.py --mode pr
+# Use an already running Valkey server (client mode only with `--valkey-path`)
+python benchmark.py --mode client --valkey-path /path/to/valkey --use-running-server
+
+# Specify custom results directory
+python benchmark.py --results-dir ./my-results
+
+# Set logging level
+python benchmark.py --log-level DEBUG
 ```
 
 ## Configuration
@@ -75,8 +88,8 @@ Create benchmark configurations in JSON format. Example:
     "data_sizes": [16, 64, 256],
     "pipelines": [1, 10, 100],
     "commands": ["SET", "GET"],
-    "cluster_modes": ["yes", "no"],
-    "tls_modes": ["yes", "no"],
+    "cluster_modes": ["no"],
+    "tls_modes": ["no"],
     "warmup": [10]
   }
 ]
@@ -104,19 +117,6 @@ results/
     ├── metrics.json                     # Performance metrics in JSON format
     └── valkey_log_cluster_disabled.log  # Valkey server logs
 ```
-
-## Building Valkey
-
-The tool can automatically build Valkey from source:
-
-```python
-from valkey_build import ServerBuilder
-
-# Build Valkey from a specific commit with TLS enabled
-builder = ServerBuilder(commit_id="1a2b3c4d", tls_mode="yes")
-valkey_path = builder.checkout_and_build()
-```
-
 ## License
 
 This project is licensed under the same license as Valkey.

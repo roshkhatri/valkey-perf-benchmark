@@ -18,13 +18,12 @@ class ClientRunner:
         self.tls_mode = True if tls_mode == "yes" else False
         self.target_ip = target_ip
         self.results_dir = results_dir
-        self.valkey_path = valkey_path
-        self.valkey_cli = f"{self.valkey_path}/{VALKEY_CLI}"
-        self.valkey_benchmark = f"{self.valkey_path}/{VALKEY_BENCHMARK}"
+        self.valkey_cli = f"{valkey_path}/{VALKEY_CLI}"
+        self.valkey_benchmark = f"{valkey_path}/{VALKEY_BENCHMARK}"
         
     def ping_server(self):
         try:
-            cmd = [f"{self.valkey_path}/{VALKEY_CLI}",
+            cmd = [self.valkey_cli,
                    "-h", self.target_ip,
                    "-p", "6379",
                    "ping"]
@@ -41,7 +40,7 @@ class ClientRunner:
             Logger.error(f"An error occurred: {e}")
 
 
-    def run_all(self):
+    def run_benchmark_config(self):
         combinations = self._generate_combinations()
         metrics_processor = MetricsProcessor(self.commit_id, self.cluster_mode, self.tls_mode)
         metric_json = []
