@@ -42,4 +42,3 @@ class ServerBuilder:
             self._run("./utils/gen-test-certs.sh", cwd=self.valkey_dir)
         else:
             self._run(["make", "-j"], cwd=self.valkey_dir)
-        return self.valkey_dir

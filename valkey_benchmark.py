@@ -4,7 +4,6 @@ import json
 import os
 from itertools import product
 from process_metrics import MetricsProcessor
-from cleanup_server import ServerCleaner
 from logger import Logger
 
 VALKEY_CLI = "src/valkey-cli"

@@ -2,7 +2,6 @@ import subprocess
 import time
 import os
 
-from cleanup_server import ServerCleaner
 from logger import Logger
 
 VALKEY_SERVER = "src/valkey-server"
@@ -14,7 +13,6 @@ class ServerLauncher:
         self.valkey_path = valkey_path
         
     def launch_all_servers(self, cluster_mode, tls_mode):
-        ServerCleaner.kill_valkey_servers()
         self._launch_server(tls_mode=tls_mode, cluster_mode=cluster_mode)
         if cluster_mode == "yes":
             self._setup_cluster(tls_mode=tls_mode)

@@ -11,7 +11,6 @@ from logger import Logger
 from valkey_build import ServerBuilder
 from valkey_server import ServerLauncher
 from valkey_benchmark import ClientRunner
-from cleanup_server import ServerCleaner
 
 # ---------- Constants --------------------------------------------------------
 DEFAULT_RESULTS_ROOT = Path("results")
@@ -102,7 +101,7 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
         builder = ServerBuilder(commit_id=commit_id, tls_mode=tls_mode, 
                                         valkey_path=args.valkey_path)
         if not args.use_running_server:
-            valkey_path = builder.build()
+            builder.build()
         else:
             Logger.info("Using pre-built Valkey instance.")
 
@@ -115,7 +114,7 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
             # ---- server side -----------------
             if (not args.use_running_server) and args.mode in ("server", "both"):
                 launcher = ServerLauncher(
-                    commit_id=commit_id, valkey_path=valkey_path
+                    commit_id=commit_id, valkey_path=args.valkey_path
                 )
                 launcher.launch_all_servers(
                     cluster_mode=cluster_mode,
@@ -131,13 +130,13 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
                     tls_mode=tls_mode,
                     target_ip=args.target_ip,
                     results_dir=results_dir,
-                    valkey_path=valkey_path,
+                    valkey_path=args.valkey_path,
                 )
                 runner.ping_server()
                 runner.run_benchmark_config()
 
                 # ---- clean up --------------------------------------------------
-                ServerCleaner.kill_valkey_servers()
+
 
 # ---------- Entry point ------------------------------------------------------
 def main() -> None:
