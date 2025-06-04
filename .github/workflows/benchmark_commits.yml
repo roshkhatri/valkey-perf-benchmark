@@ -1,0 +1,68 @@
+name: Benchmark multiple commits
+
+on:
+  workflow_call:
+    inputs:
+      commit_ids:
+        description: "JSON array of commit SHAs to benchmark"
+        required: true
+        type: string   # JSON array passed as a string
+    outputs:
+      results_dir_root:
+        description: "Root folder that now contains results/<sha>/..."
+        value: ${{ jobs.bench.outputs.results_root }}
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    outputs:
+      results_root: ${{ steps.set-root.outputs.root }}
+
+    steps:
+      - name: Set root output
+        id: set-root
+        run: echo "root=$(pwd)/results" >> "$GITHUB_OUTPUT"
+
+      - name: Install tooling
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Parse commit list
+        id: parse
+        run: |
+          echo '${{ inputs.commit_ids }}' | jq -c .
+          echo "count=$(echo '${{ inputs.commit_ids }}' | jq 'length')" >>"$GITHUB_OUTPUT"
+
+      #############################################
+      # Main loop over every commit SHA provided  #
+      #############################################
+      - name: Loop & benchmark
+        env:
+          COMMITS_JSON: ${{ inputs.commit_ids }}
+        run: |
+          commits=$(echo "$COMMITS_JSON" | jq -r '.[]')
+          for sha in $commits; do
+            echo "===== BENCHMARKING $sha ====="
+
+            # -- checkout that commit
+            git clone https://github.com/valkey-io/valkey.git src-$sha
+            cd src-$sha
+            git checkout $sha
+
+            # -- set up Python & deps once per commit
+            python3 -m venv .venv
+            . .venv/bin/activate
+            pip install -q -r requirements.txt
+
+            # -- run benchmark
+            python benchmark.py \
+              --commit $sha \
+              --config ./configs/benchmark-configs.json
+
+            # -- move results out to shared folder
+            mkdir -p "$GITHUB_WORKSPACE/results/$sha"
+            mv results/$sha/* "$GITHUB_WORKSPACE/results/$sha" || true  # adapt path if your script differs
+
+            cd "$GITHUB_WORKSPACE"   # back to workspace root
+            rm -rf src-$sha          # keep runner clean
+            deactivate
+          done
