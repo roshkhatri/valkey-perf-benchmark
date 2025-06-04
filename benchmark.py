@@ -19,6 +19,7 @@ REQUIRED_KEYS = [
     "keyspacelen",
     "data_sizes",
     "pipelines",
+    "clients",
     "commands",
     "cluster_modes",
     "tls_modes",

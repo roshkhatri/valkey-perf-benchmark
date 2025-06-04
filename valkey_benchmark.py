@@ -40,14 +40,13 @@ class ClientRunner:
 
 
     def run_benchmark_config(self):
-        combinations = self._generate_combinations()
         metrics_processor = MetricsProcessor(self.commit_id, self.cluster_mode, self.tls_mode)
         metric_json = []
 
         Logger.info(f"=== Starting benchmark: TLS={self.tls_mode}, Cluster={self.cluster_mode} ===")
-        for (requests, keyspacelen, data_size, pipeline, command, warmup) in combinations:
-            Logger.info(f"--> Running {command} with data size {data_size}, pipeline {pipeline}")
-            Logger.info(f"requests: {requests}, keyspacelen: {keyspacelen}, data_size: {data_size}, pipeline: {pipeline}, warmup: {warmup}")
+        for (requests, keyspacelen, data_size, pipeline, clients, command, warmup) in self._generate_combinations():
+            Logger.info(f"--> Running {command} with data size {data_size}, pipeline {pipeline}, clients {clients}")
+            Logger.info(f"requests: {requests}, keyspacelen: {keyspacelen}, data_size: {data_size}, pipeline: {pipeline}, clients: {clients}, warmup: {warmup}")
             
             # Optionally flush keyspace if needed
             if command in ["SET", "RPUSH", "LPUSH", "SADD"]:
@@ -56,9 +55,9 @@ class ClientRunner:
                 self._run(flush_cmd)
                 time.sleep(2)
 
+            bench_cmd = self._build_benchmark_command(self.tls_mode, requests, keyspacelen, data_size, pipeline, clients, command)
             # Warmup phase
             if warmup:
-                bench_cmd = self._build_benchmark_command(self.tls_mode, requests, keyspacelen, data_size, pipeline, command)
                 try:
                     Logger.info(f"Starting warmup for {warmup} seconds...")
                     proc = subprocess.Popen(bench_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -71,7 +70,6 @@ class ClientRunner:
                     
             # Run benchmark
             Logger.info("Starting benchmark...")
-            bench_cmd = self._build_benchmark_command(self.tls_mode, requests, keyspacelen, data_size, pipeline, command)
             try:
                 proc = subprocess.run(bench_cmd, capture_output=True, text=True, check=True)
                 # Log the benchmark output
@@ -103,6 +101,7 @@ class ClientRunner:
             self.config["keyspacelen"],
             self.config["data_sizes"],
             self.config["pipelines"],
+            self.config["clients"],
             self.config["commands"],
             self.config["warmup"]
         ))
@@ -115,10 +114,11 @@ class ClientRunner:
                     "--cacert", "./tests/tls/ca.crt"]
         return cmd
 
-    def _build_benchmark_command(self, tls, requests, keyspacelen, data_size, pipeline, command):
+    def _build_benchmark_command(self, tls, requests, keyspacelen, data_size, pipeline, clients, command):
         cmd = [self.valkey_benchmark, "-h", self.target_ip, "-p", "6379",
                "-n", str(requests), "-r", str(keyspacelen), "-d", str(data_size),
-               "-P", str(pipeline), "-t", command, "--csv"]
+               "-P", str(pipeline), "-c", str(clients), "-t", command, "--csv"]
+            
         if tls:
             cmd += ["--tls", "--cert", "./tests/tls/valkey.crt",
                     "--key", "./tests/tls/valkey.key",
