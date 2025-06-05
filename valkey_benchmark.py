@@ -48,25 +48,26 @@ class ClientRunner:
             Logger.info(f"--> Running {command} with data size {data_size}, pipeline {pipeline}, clients {clients}")
             Logger.info(f"requests: {requests}, keyspacelen: {keyspacelen}, data_size: {data_size}, pipeline: {pipeline}, clients: {clients}, warmup: {warmup}")
             
-            # Optionally flush keyspace if needed
+            bench_cmd = self._build_benchmark_command(self.tls_mode, requests, keyspacelen, data_size, pipeline, clients, command)
+            
+            # Optionally flush keyspace and warmup cache if needed
             if command in ["SET", "RPUSH", "LPUSH", "SADD"]:
                 Logger.info("Flushing keyspace before benchmark...")
                 flush_cmd = self._build_cli_command(self.tls_mode) + ["FLUSHALL", "SYNC"]
                 self._run(flush_cmd)
                 time.sleep(2)
 
-            bench_cmd = self._build_benchmark_command(self.tls_mode, requests, keyspacelen, data_size, pipeline, clients, command)
-            # Warmup phase
-            if warmup:
-                try:
-                    Logger.info(f"Starting warmup for {warmup} seconds...")
-                    proc = subprocess.Popen(bench_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    time.sleep(warmup)
-                    proc.terminate()
-                    proc.wait(timeout=5)  # Wait for process to terminate
-                    Logger.info(f"Warmup completed after {warmup} seconds")
-                except Exception as e:
-                    Logger.error(f"Warmup failed: {e}")
+                # Warmup phase
+                if warmup:
+                    try:
+                        Logger.info(f"Starting warmup for {warmup} seconds...")
+                        proc = subprocess.Popen(bench_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                        time.sleep(warmup)
+                        proc.terminate()
+                        proc.wait(timeout=5)  # Wait for process to terminate
+                        Logger.info(f"Warmup completed after {warmup} seconds")
+                    except Exception as e:
+                        Logger.error(f"Warmup failed: {e}")
                     
             # Run benchmark
             Logger.info("Starting benchmark...")
