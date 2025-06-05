@@ -31,12 +31,14 @@ jobs:
 
       - name: Install tooling
         run: sudo apt-get update && sudo apt-get install -y jq awscli
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 
       - name: Download completed_commits.json from S3
-        env:
-          AWS_REGION: us-east-1
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws s3 cp s3://valkey-benchmark-results/completed_commits.json completed_commits.json \
             || echo '[]' > completed_commits.json

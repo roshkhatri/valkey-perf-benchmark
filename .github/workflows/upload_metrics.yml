@@ -18,11 +18,14 @@ jobs:
       - name: Install tooling
         run: sudo apt-get update && sudo apt-get install -y jq awscli
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
       - name: Upload all results to S3
         env:
-          AWS_REGION: us-east-1
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           COMMITS_JSON: ${{ inputs.commit_ids }}
           ROOT_DIR: ${{ inputs.results_dir_root }}
         run: |
@@ -36,10 +39,6 @@ jobs:
           done
 
       - name: Update completed_commits.json
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          COMMITS_JSON: ${{ inputs.commit_ids }}
         run: |
           tmp=$(mktemp)
           aws s3 cp s3://valkey-benchmark-results/completed_commits.json "$tmp" \
