@@ -97,14 +97,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
-          path: results/
+          path: valkey-perf-benchmark/results
       
-      - name: Upload metrics to S3
+      - name: Upload metrics to S3  
         env:
-          COMMITS_JSON: ${{ steps.determine_commits.outputs.commit_ids }}
+          COMMITS: ${{ steps.determine_commits.outputs.commit_ids }}
         run: |
-          commits=$(echo "$COMMITS_JSON" | jq -r '.[]')
-          for sha in $commits; do
+          ROOT_DIR="valkey-perf-benchmark/results"
+          for sha in $COMMITS; do
             echo "Uploading metrics for $sha"
             aws s3 cp "$ROOT_DIR/$sha/metrics.json" \
               "s3://${{ secrets.AWS_S3_BUCKET }}/results/$sha/metrics.json"
