@@ -109,3 +109,26 @@ jobs:
             aws s3 cp "$ROOT_DIR/$sha/metrics.json" \
               "s3://${{ secrets.AWS_S3_BUCKET }}/results/$sha/metrics.json"
           done
+
+      - name: Update completed_commits.json
+        working-directory: valkey
+        run: |
+          # Read existing completed commits
+          if [[ -f completed_commits.json ]]; then
+            jq '.' completed_commits.json > temp.json
+          else
+            echo '[]' > temp.json
+          fi
+
+          # Add new commits to the list
+          for sha in ${{ steps.determine_commits.outputs.commit_ids }}; do
+            if ! jq -e ". | index(\"$sha\")" temp.json > /dev/null; then
+              jq ". + [\"$sha\"]" temp.json > updated.json && mv updated.json temp.json
+            fi
+          done
+
+          # Write back to completed_commits.json
+          mv temp.json completed_commits.json
+
+          # Upload updated completed_commits.json to S3
+          aws s3 cp completed_commits.json "s3://${{ secrets.AWS_S3_BUCKET }}/completed_commits.json"
