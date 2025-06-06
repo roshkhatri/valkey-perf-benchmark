@@ -10,7 +10,7 @@ on:
         type: string
   push:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '*/20 * * * *'
 
 defaults:
   run:
