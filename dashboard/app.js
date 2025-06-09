@@ -10,6 +10,7 @@
 
 const COMPLETED_URL = "../completed_commits.json";
 const RESULT_URL = sha => `../results/${sha}/metrics.json`;
+const COMMIT_URL = sha => `https://github.com/valkey-io/valkey/commit/${sha}`;
 
 const {
   ResponsiveContainer,
@@ -40,20 +41,34 @@ function Dashboard() {
   const [tls, setTLS]                 = React.useState("all"); // all/true/false
   const [metricKey, setMetricKey]     = React.useState("rps");
 
-  // 1) load commit list (once)
+  // 1) periodically refresh commit list
   React.useEffect(() => {
-    fetchJSON(COMPLETED_URL)
-      .then(list => {
-        const recent = list.slice(-100);
+    async function refresh() {
+      try {
+        const raw    = await fetchJSON(COMPLETED_URL);
+        const recent = raw.slice(-100);
+
+        const list = recent.map(c => typeof c === 'string' ? c : c.sha);
         const times = {};
-        recent.forEach(e => { times[e.sha] = e.timestamp; });
-        setCommitTimes(times);
-        setCommits(recent.map(e => e.sha));
-      })
-      .catch(err => {
+        recent.forEach(c => {
+          if (typeof c === 'object' && c.sha && c.timestamp) {
+            times[c.sha] = c.timestamp;
+          }
+        });
+
+        setCommitTimes(prev => ({ ...prev, ...times }));
+        setCommits(prev => {
+          const same = prev.length === list.length &&
+            prev.every((sha, i) => sha === list[i]);
+          return same ? prev : list;
+        });
+      } catch (err) {
         console.error('Failed to load commit list:', err);
-        setCommits([]);
-      });
+      }
+    }
+    refresh();
+    const id = setInterval(refresh, 60000);
+    return () => clearInterval(id);
   }, []);
 
   const loadMetrics = React.useCallback(async () => {
@@ -69,11 +84,16 @@ function Dashboard() {
         console.error(`Failed to load metrics for ${sha}:`, err);
       }
     }));
-    const ordered = [...commits].sort((a,b) => new Date(times[a] || 0) - new Date(times[b] || 0));
-    const orderMap = Object.fromEntries(ordered.map((s,i)=>[s,i]));
-    all.sort((a,b) => orderMap[a.sha] - orderMap[b.sha]);
+    const ordered = [...commits].sort((a, b) =>
+      new Date(times[a] || 0) - new Date(times[b] || 0)
+    );
+    const orderMap = Object.fromEntries(ordered.map((s, i) => [s, i]));
+    all.sort((a, b) => orderMap[a.sha] - orderMap[b.sha]);
     setCommitTimes(times);
-    setCommits(ordered);
+    // avoid triggering the effect again if order didn't change
+    const isSameOrder = ordered.length === commits.length &&
+      ordered.every((sha, i) => sha === commits[i]);
+    if (!isSameOrder) setCommits(ordered);
     setMetrics(all);
   }, [commits, commitTimes]);
 
@@ -96,6 +116,7 @@ function Dashboard() {
         const row = rows.find(r => r.sha === sha);
         return {
           sha: sha.slice(0,8),
+          full: sha,
           timestamp: commitTimes[sha],
           value: row ? row[metricKey] : null
         };
@@ -109,11 +130,7 @@ function Dashboard() {
     React.createElement('div', {className:'flex flex-wrap gap-4 justify-center'},
       labelSel('Cluster', cluster, setCluster, ['all','true','false']),
       labelSel('TLS',     tls,     setTLS,     ['all','true','false']),
-      labelSel('Metric',  metricKey,setMetricKey, ['rps','avg_latency_ms','p95_latency_ms','p99_latency_ms']),
-      React.createElement('button', {
-        className:'bg-blue-600 text-white px-3 py-1 rounded',
-        onClick: loadMetrics
-      }, 'Load Metrics')
+      labelSel('Metric',  metricKey,setMetricKey, ['rps','avg_latency_ms','p95_latency_ms','p99_latency_ms'])
     ),
     // One chart per command ---------------------------------------------
     ...commands.map(cmd => React.createElement('div', {key:cmd, className:'bg-white rounded shadow p-2 w-full max-w-4xl'},
@@ -122,16 +139,14 @@ function Dashboard() {
         React.createElement(LineChart, {data: seriesByCommand[cmd]},
           React.createElement(CartesianGrid, {strokeDasharray:'3 3'}),
           React.createElement(XAxis, {
-            dataKey:'timestamp',
+            dataKey:'sha',
             interval:0,
-            angle:-45,
-            textAnchor:'end',
             height:70,
-            tickFormatter:ts=>new Date(ts).toLocaleDateString()
+            tick: ShaTick
           }),
           React.createElement(YAxis),
           React.createElement(Tooltip),
-          React.createElement(Brush, {dataKey:'timestamp'}),
+          React.createElement(Brush, {dataKey:'sha'}),
           React.createElement(Line, {type:'monotone', dataKey:'value', stroke:'#3b82f6', dot:false, name: metricKey })
         )
       )
@@ -145,6 +160,17 @@ function labelSel(label, val, setter, opts){
   return React.createElement('label', {className:'font-medium'}, `${label}:`,
     React.createElement('select', {className:'border rounded p-1 ml-2', value:val, onChange:e=>setter(e.target.value)},
       opts.map(o=>React.createElement('option',{key:o,value:o},o))
+    )
+  );
+}
+
+function ShaTick(props) {
+  const {x, y, payload} = props;
+  const sha = payload.value;
+  const full = payload.payload.full;
+  return React.createElement('g', {transform:`translate(${x},${y})`},
+    React.createElement('a', {href: COMMIT_URL(full), target:'_blank', rel:'noopener noreferrer'},
+      React.createElement('text', {x:0, y:0, dy:16, textAnchor:'end', transform:'rotate(-45)', style:{cursor:'pointer'}}, sha)
     )
   );
 }
