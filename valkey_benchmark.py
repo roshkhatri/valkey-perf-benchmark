@@ -42,7 +42,7 @@ class ClientRunner:
             Logger.error(f"An error occurred: {e}")
 
     def get_commit_time(self, commit_id: str) -> str:
-    """Return ISO8601 timestamp for a commit."""
+        """Return ISO8601 timestamp for a commit."""
         try:
             commit_time = subprocess.run(
                 ["git", "show", "-s", "--format=%cI", commit_id],
