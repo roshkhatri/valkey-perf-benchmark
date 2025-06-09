@@ -117,6 +117,17 @@ results/
     ├── metrics.json                     # Performance metrics in JSON format
     └── valkey_log_cluster_disabled.log  # Valkey server logs
 ```
+
+## Dashboard Hosted on S3
+
+The `dashboard/` directory contains a small React application for visualizing
+benchmark metrics. Changes to this directory trigger the `dashboard_sync.yml`
+workflow which uploads the files to an Amazon S3 bucket configured for static
+website hosting. Metrics files (`completed_commits.json` and the `results/`
+folder) are stored in the same bucket so the dashboard can fetch them directly.
+
+Open `dashboard/index.html` from your bucket to view the latest benchmark
+results. See `dashboard/README.md` for more details.
 ## License
 
 This project is licensed under the same license as Valkey.
