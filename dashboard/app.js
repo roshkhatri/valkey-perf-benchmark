@@ -8,8 +8,11 @@
 
 /* global React, ReactDOM, Recharts */
 
-const COMPLETED_URL = "../completed_commits.json";
-const RESULT_URL = sha => `../results/${sha}/metrics.json`;
+const queryParams = new URLSearchParams(window.location.search);
+const rawBase = queryParams.get('base');
+const BASE = rawBase ? `../${rawBase.replace(/\/+$/, '')}` : '..';
+const COMPLETED_URL = `${BASE}/completed_commits.json`;
+const RESULT_URL = sha => `${BASE}/results/${sha}/metrics.json`;
 
 const {
   ResponsiveContainer,
