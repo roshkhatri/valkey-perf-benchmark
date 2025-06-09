@@ -2,8 +2,8 @@
    Features:
    • Fetch last 100 commit SHAs from completed_commits.json
    • Load metrics.json for each commit in parallel
-   • Filter by command, cluster_mode, tls
-   • Display trend lines over commits for RPS and latency percentiles
+   • Filter by cluster_mode and tls
+   • Display separate trend charts for each command over the last commits
 */
 
 /* global React, ReactDOM, Recharts */
@@ -34,7 +34,6 @@ function Dashboard() {
   const [commits, setCommits] = React.useState([]);  // full sha[] newest→oldest
   const [metrics, setMetrics] = React.useState([]);  // flat metrics rows
 
-  const [command, setCommand]         = React.useState("SET");
   const [cluster, setCluster]         = React.useState("all"); // all/true/false
   const [tls, setTLS]                 = React.useState("all"); // all/true/false
   const [metricKey, setMetricKey]     = React.useState("rps");
@@ -69,36 +68,38 @@ function Dashboard() {
     })();
   }, [commits]);
 
-  // distinct commands for UI
-  const commandOpts = React.useMemo(() => [...new Set(metrics.map(m=>m.command))].sort(), [metrics]);
+  // unique command list
+  const commands = React.useMemo(() => [...new Set(metrics.map(m => m.command))].sort(), [metrics]);
 
-  // filtered rows
-  const filtered = React.useMemo(() => metrics.filter(r =>
-    (command ? r.command === command : true) &&
-    (cluster === "all" || r.cluster_mode === (cluster === "true")) &&
-    (tls     === "all" || r.tls          === (tls === "true"))
-  ), [metrics, command, cluster, tls]);
-
-  // regroup by sha → single row per sha with chosen metric
-  const series = React.useMemo(() => {
-    return commits.map(sha => {
-      const row = filtered.find(r => r.sha === sha);
-      return { sha: sha.slice(0,8), value: row ? row[metricKey] : null };
+  // regroup per command → series of commit metrics
+  const seriesByCommand = React.useMemo(() => {
+    const map = {};
+    commands.forEach(cmd => {
+      const rows = metrics.filter(r =>
+        r.command === cmd &&
+        (cluster === "all" || r.cluster_mode === (cluster === "true")) &&
+        (tls     === "all" || r.tls          === (tls === "true"))
+      );
+      map[cmd] = commits.map(sha => {
+        const row = rows.find(r => r.sha === sha);
+        return { sha: sha.slice(0,8), value: row ? row[metricKey] : null };
+      });
     });
-  }, [filtered, commits, metricKey]);
+    return map;
+  }, [metrics, commands, commits, cluster, tls, metricKey]);
 
-  return React.createElement('div', {className:'space-y-6'},
+  const children = [
     // Controls -----------------------------------------------------------
     React.createElement('div', {className:'flex flex-wrap gap-4'},
-      labelSel('Command', command, setCommand, commandOpts),
       labelSel('Cluster', cluster, setCluster, ['all','true','false']),
       labelSel('TLS',     tls,     setTLS,     ['all','true','false']),
       labelSel('Metric',  metricKey,setMetricKey, ['rps','avg_latency_ms','p95_latency_ms','p99_latency_ms'])
     ),
-    // Chart --------------------------------------------------------------
-    React.createElement('div', {className:'bg-white rounded shadow p-2'},
+    // One chart per command ---------------------------------------------
+    ...commands.map(cmd => React.createElement('div', {key:cmd, className:'bg-white rounded shadow p-2'},
+      React.createElement('div', {className:'font-semibold mb-2'}, cmd),
       React.createElement(ResponsiveContainer, {width:'100%', height:400},
-        React.createElement(LineChart, {data: series},
+        React.createElement(LineChart, {data: seriesByCommand[cmd]},
           React.createElement(CartesianGrid, {strokeDasharray:'3 3'}),
           React.createElement(XAxis, {dataKey:'sha', interval:0, angle:-45, textAnchor:'end', height:70}),
           React.createElement(YAxis),
@@ -106,8 +107,10 @@ function Dashboard() {
           React.createElement(Line, {type:'monotone', dataKey:'value', stroke:'#3b82f6', dot:false, name: metricKey })
         )
       )
-    )
-  );
+    ))
+  ];
+
+  return React.createElement('div', {className:'space-y-6'}, ...children);
 }
 
 function labelSel(label, val, setter, opts){
