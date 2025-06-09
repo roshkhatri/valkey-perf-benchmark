@@ -43,7 +43,10 @@ function Dashboard() {
   React.useEffect(() => {
     fetchJSON(COMPLETED_URL)
       .then(list => setCommits(list.slice(-100).reverse())) // newest first
-      .catch(() => setCommits([]));
+      .catch(err => {
+        console.error('Failed to load commit list:', err);
+        setCommits([]);
+      });
   }, []);
 
   // 2) fetch metrics for each commit
@@ -55,7 +58,9 @@ function Dashboard() {
         try {
           const rows = await fetchJSON(RESULT_URL(sha));
           rows.forEach(r => all.push({ ...r, sha }));
-        } catch { /* ignore missing */ }
+        } catch (err) {
+          console.error(`Failed to load metrics for ${sha}:`, err);
+        }
       }));
       // sort by commit order (commits array already newest→oldest)
       const order = Object.fromEntries(commits.map((s,i)=>[s,i]));
@@ -115,5 +120,10 @@ function labelSel(label, val, setter, opts){
 
 // boot ------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-  ReactDOM.render(React.createElement(Dashboard), document.getElementById('chartRoot'));
+  const rootEl = document.getElementById('chartRoot');
+  if (ReactDOM.createRoot) {
+    ReactDOM.createRoot(rootEl).render(React.createElement(Dashboard));
+  } else {
+    ReactDOM.render(React.createElement(Dashboard), rootEl);
+  }
 });
