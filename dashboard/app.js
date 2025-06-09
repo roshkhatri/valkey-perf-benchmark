@@ -45,8 +45,18 @@ function Dashboard() {
   React.useEffect(() => {
     async function refresh() {
       try {
-        const raw = await fetchJSON(COMPLETED_URL);
-        const list = raw.map(c => typeof c === 'string' ? c : c.sha).slice(-100);
+        const raw    = await fetchJSON(COMPLETED_URL);
+        const recent = raw.slice(-100);
+
+        const list = recent.map(c => typeof c === 'string' ? c : c.sha);
+        const times = {};
+        recent.forEach(c => {
+          if (typeof c === 'object' && c.sha && c.timestamp) {
+            times[c.sha] = c.timestamp;
+          }
+        });
+
+        setCommitTimes(prev => ({ ...prev, ...times }));
         setCommits(prev => {
           const same = prev.length === list.length &&
             prev.every((sha, i) => sha === list[i]);
