@@ -11,25 +11,6 @@ from logger import Logger
 VALKEY_CLI = "src/valkey-cli"
 VALKEY_BENCHMARK = "src/valkey-benchmark"
 
-
-def get_commit_time(commit_id: str, repo_dir: Path) -> str:
-    """Return ISO8601 timestamp for a commit."""
-    cwd = repo_dir if repo_dir.exists() else None
-    if cwd is None:
-        Logger.warning(f"Repo dir {repo_dir} not found, using CWD for git calls")
-    try:
-        result = subprocess.run(
-            ["git", "show", "-s", "--format=%cI", commit_id],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=cwd,
-        )
-        return result.stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        Logger.error(f"Failed to get commit time for {commit_id}: {e}")
-        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
 class ClientRunner:
     def __init__(self, commit_id, config, cluster_mode, tls_mode, target_ip, results_dir, valkey_path):
         self.commit_id = commit_id
@@ -60,9 +41,24 @@ class ClientRunner:
         except Exception as e:
             Logger.error(f"An error occurred: {e}")
 
+    def get_commit_time(self, commit_id: str) -> str:
+    """Return ISO8601 timestamp for a commit."""
+        try:
+            commit_time = subprocess.run(
+                ["git", "show", "-s", "--format=%cI", commit_id],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=self.valkey_path,
+            )
+            return commit_time.stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            Logger.error(f"Failed to get commit time for {commit_id}: {e}")
+            return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
 
     def run_benchmark_config(self):
-        commit_time = get_commit_time(self.commit_id, Path(self.valkey_path))
+        commit_time = self.get_commit_time(self.commit_id)
         metrics_processor = MetricsProcessor(
             self.commit_id, self.cluster_mode, self.tls_mode, commit_time
         )
