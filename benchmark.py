@@ -6,6 +6,8 @@ import logging
 from itertools import product
 from pathlib import Path
 from typing import List
+import subprocess
+import time
 
 from logger import Logger
 from valkey_build import ServerBuilder
@@ -92,11 +94,23 @@ def ensure_results_dir(root: Path, commit_id: str) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     return d
 
+def get_commit_time(commit_id: str, repo_dir: Path) -> str:
+    try:
+        result = subprocess.run([
+            "git", "show", "-s", "--format=%cI", commit_id
+        ], capture_output=True, text=True, check=True, cwd=repo_dir)
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        Logger.error(f"Failed to get commit time for {commit_id}: {e}")
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
 
 def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
     results_dir = ensure_results_dir(args.results_dir, commit_id)
     Logger.init_logging(results_dir / "logs.txt")
     logging.getLogger().setLevel(args.log_level)
+
+    commit_time = get_commit_time(commit_id, args.valkey_path)
 
     for tls_mode in cfg["tls_modes"]:
         builder = ServerBuilder(commit_id=commit_id, tls_mode=tls_mode, 
@@ -126,6 +140,7 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
             if args.mode in ("client", "both"):
                 runner = ClientRunner(
                     commit_id=commit_id,
+                    commit_time=commit_time,
                     config=cfg,
                     cluster_mode=cluster_mode,
                     tls_mode=tls_mode,
