@@ -4,6 +4,7 @@ import json
 import os
 import random
 from itertools import product
+from pathlib import Path
 from process_metrics import MetricsProcessor
 from logger import Logger
 
@@ -18,6 +19,7 @@ class ClientRunner:
         self.tls_mode = True if tls_mode == "yes" else False
         self.target_ip = target_ip
         self.results_dir = results_dir
+        self.valkey_path = valkey_path
         self.valkey_cli = f"{valkey_path}/{VALKEY_CLI}"
         self.valkey_benchmark = f"{valkey_path}/{VALKEY_BENCHMARK}"
         
@@ -39,9 +41,27 @@ class ClientRunner:
         except Exception as e:
             Logger.error(f"An error occurred: {e}")
 
+    def get_commit_time(self, commit_id: str) -> str:
+        """Return ISO8601 timestamp for a commit."""
+        try:
+            commit_time = subprocess.run(
+                ["git", "show", "-s", "--format=%cI", commit_id],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=self.valkey_path,
+            )
+            return commit_time.stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            Logger.error(f"Failed to get commit time for {commit_id}: {e}")
+            return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
 
     def run_benchmark_config(self):
-        metrics_processor = MetricsProcessor(self.commit_id, self.cluster_mode, self.tls_mode)
+        commit_time = self.get_commit_time(self.commit_id)
+        metrics_processor = MetricsProcessor(
+            self.commit_id, self.cluster_mode, self.tls_mode, commit_time
+        )
         metric_json = []
 
         Logger.info(f"=== Starting benchmark: TLS={self.tls_mode}, Cluster={self.cluster_mode} ===")

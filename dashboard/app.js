@@ -74,12 +74,12 @@ function Dashboard() {
   const loadMetrics = React.useCallback(async () => {
     if (!commits.length) return;
     const all = [];
-    const times = {};
+    const times = { ...commitTimes };
     await Promise.all(commits.map(async sha => {
       try {
         const rows = await fetchJSON(RESULT_URL(sha));
         rows.forEach(r => all.push({ ...r, sha }));
-        if (rows[0] && rows[0].timestamp) times[sha] = rows[0].timestamp;
+        if (rows[0] && rows[0].timestamp && !times[sha]) times[sha] = rows[0].timestamp;
       } catch (err) {
         console.error(`Failed to load metrics for ${sha}:`, err);
       }
@@ -95,7 +95,7 @@ function Dashboard() {
       ordered.every((sha, i) => sha === commits[i]);
     if (!isSameOrder) setCommits(ordered);
     setMetrics(all);
-  }, [commits]);
+  }, [commits, commitTimes]);
 
   // 2) fetch metrics for each commit
   React.useEffect(() => { if (commits.length) loadMetrics(); }, [commits, loadMetrics]);

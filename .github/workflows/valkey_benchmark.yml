@@ -67,7 +67,7 @@ jobs:
         working-directory: valkey
         run: |
             # Convert completed_commits.json to newline-separated SHA list
-            jq -r '.[]' completed_commits.json > seen.txt || echo > seen.txt
+            jq -r '.[].sha' completed_commits.json > seen.txt || echo > seen.txt
 
             to_benchmark=()
 
@@ -120,10 +120,11 @@ jobs:
             echo '[]' > temp.json
           fi
 
-          # Add new commits to the list
+          # Add new commits with timestamp
           for sha in ${{ steps.determine_commits.outputs.commit_ids }}; do
-            if ! jq -e ". | index(\"$sha\")" temp.json > /dev/null; then
-              jq ". + [\"$sha\"]" temp.json > updated.json && mv updated.json temp.json
+            if ! jq -e '.[] | select(.sha=="'"$sha"'")' temp.json > /dev/null; then
+              ts=$(git show -s --format=%cI "$sha")
+              jq ". + [{\"sha\":\"$sha\",\"timestamp\":\"$ts\"}]" temp.json > updated.json && mv updated.json temp.json
             fi
           done
 

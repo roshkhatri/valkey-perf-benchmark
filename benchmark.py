@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
-import os
 import logging
-from itertools import product
 from pathlib import Path
 from typing import List
 
@@ -92,14 +90,13 @@ def ensure_results_dir(root: Path, commit_id: str) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     return d
 
-
 def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
     results_dir = ensure_results_dir(args.results_dir, commit_id)
     Logger.init_logging(results_dir / "logs.txt")
     logging.getLogger().setLevel(args.log_level)
 
     for tls_mode in cfg["tls_modes"]:
-        builder = ServerBuilder(commit_id=commit_id, tls_mode=tls_mode, 
+        builder = ServerBuilder(commit_id=commit_id, tls_mode=tls_mode,
                                         valkey_path=args.valkey_path)
         if not args.use_running_server:
             builder.build()
