@@ -115,6 +115,7 @@ results/
 └── <commit-id>/
     ├── logs.txt                         # Benchmark logs
     ├── metrics.json                     # Performance metrics in JSON format
+    # each row includes the commit timestamp
     └── valkey_log_cluster_disabled.log  # Valkey server logs
 ```
 
@@ -125,6 +126,12 @@ benchmark metrics. Changes to this directory trigger the `dashboard_sync.yml`
 workflow which uploads the files to an Amazon S3 bucket configured for static
 website hosting. Metrics files (`completed_commits.json` and the `results/`
 folder) are stored in the same bucket so the dashboard can fetch them directly.
+`completed_commits.json` now stores objects containing the commit SHA and the
+original commit timestamp:
+
+```json
+[ { "sha": "abcdef123", "timestamp": "2024-01-02T15:04:05Z" } ]
+```
 
 Open `dashboard/index.html` from your bucket to view the latest benchmark
 results. See `dashboard/README.md` for more details.

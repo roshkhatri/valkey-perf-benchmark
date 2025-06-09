@@ -11,8 +11,9 @@ VALKEY_CLI = "src/valkey-cli"
 VALKEY_BENCHMARK = "src/valkey-benchmark"
 
 class ClientRunner:
-    def __init__(self, commit_id, config, cluster_mode, tls_mode, target_ip, results_dir, valkey_path):
+    def __init__(self, commit_id, commit_time, config, cluster_mode, tls_mode, target_ip, results_dir, valkey_path):
         self.commit_id = commit_id
+        self.commit_time = commit_time
         self.config = config
         self.cluster_mode = True if cluster_mode == "yes" else False
         self.tls_mode = True if tls_mode == "yes" else False
@@ -41,7 +42,7 @@ class ClientRunner:
 
 
     def run_benchmark_config(self):
-        metrics_processor = MetricsProcessor(self.commit_id, self.cluster_mode, self.tls_mode)
+        metrics_processor = MetricsProcessor(self.commit_id, self.cluster_mode, self.tls_mode, self.commit_time)
         metric_json = []
 
         Logger.info(f"=== Starting benchmark: TLS={self.tls_mode}, Cluster={self.cluster_mode} ===")

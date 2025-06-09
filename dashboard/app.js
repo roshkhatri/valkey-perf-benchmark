@@ -43,7 +43,13 @@ function Dashboard() {
   // 1) load commit list (once)
   React.useEffect(() => {
     fetchJSON(COMPLETED_URL)
-      .then(list => setCommits(list.slice(-100)))
+      .then(list => {
+        const recent = list.slice(-100);
+        const times = {};
+        recent.forEach(e => { times[e.sha] = e.timestamp; });
+        setCommitTimes(times);
+        setCommits(recent.map(e => e.sha));
+      })
       .catch(err => {
         console.error('Failed to load commit list:', err);
         setCommits([]);
@@ -53,12 +59,12 @@ function Dashboard() {
   const loadMetrics = React.useCallback(async () => {
     if (!commits.length) return;
     const all = [];
-    const times = {};
+    const times = { ...commitTimes };
     await Promise.all(commits.map(async sha => {
       try {
         const rows = await fetchJSON(RESULT_URL(sha));
         rows.forEach(r => all.push({ ...r, sha }));
-        if (rows[0] && rows[0].timestamp) times[sha] = rows[0].timestamp;
+        if (rows[0] && rows[0].timestamp && !times[sha]) times[sha] = rows[0].timestamp;
       } catch (err) {
         console.error(`Failed to load metrics for ${sha}:`, err);
       }
@@ -69,7 +75,7 @@ function Dashboard() {
     setCommitTimes(times);
     setCommits(ordered);
     setMetrics(all);
-  }, [commits]);
+  }, [commits, commitTimes]);
 
   // 2) fetch metrics for each commit
   React.useEffect(() => { if (commits.length) loadMetrics(); }, [commits, loadMetrics]);

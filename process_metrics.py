@@ -4,10 +4,11 @@ from logger import Logger
 
 
 class MetricsProcessor:
-    def __init__(self, commit_id, cluster_mode, tls_mode):
+    def __init__(self, commit_id, cluster_mode, tls_mode, commit_time):
         self.commit_id = commit_id
         self.cluster_mode = cluster_mode
         self.tls_mode = tls_mode
+        self.commit_time = commit_time
 
     def parse_csv_output(self, output, command, data_size, pipeline):
         """
@@ -30,7 +31,7 @@ class MetricsProcessor:
         data = dict(zip(labels, values))
 
         return {
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "timestamp": self.commit_time,
             "commit": self.commit_id,
             "command": command,
             "data_size": int(data_size),
