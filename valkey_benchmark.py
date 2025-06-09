@@ -2,6 +2,7 @@ import subprocess
 import time
 import json
 import os
+import random
 from itertools import product
 from process_metrics import MetricsProcessor
 from logger import Logger
@@ -48,7 +49,9 @@ class ClientRunner:
             Logger.info(f"--> Running {command} with data size {data_size}, pipeline {pipeline}, clients {clients}")
             Logger.info(f"requests: {requests}, keyspacelen: {keyspacelen}, data_size: {data_size}, pipeline: {pipeline}, clients: {clients}, warmup: {warmup}")
             
-            bench_cmd = self._build_benchmark_command(self.tls_mode, requests, keyspacelen, data_size, pipeline, clients, command)
+            seed_val = random.randint(0, 1000000)
+            Logger.info(f"Using seed value: {seed_val}")
+            bench_cmd = self._build_benchmark_command(self.tls_mode, requests, keyspacelen, data_size, pipeline, clients, command, seed_val)
             
             # Optionally flush keyspace and warmup cache if needed
             if command in ["SET", "RPUSH", "LPUSH", "SADD"]:
@@ -115,10 +118,10 @@ class ClientRunner:
                     "--cacert", "./tests/tls/ca.crt"]
         return cmd
 
-    def _build_benchmark_command(self, tls, requests, keyspacelen, data_size, pipeline, clients, command):
+    def _build_benchmark_command(self, tls, requests, keyspacelen, data_size, pipeline, clients, command, seed_val):
         cmd = [self.valkey_benchmark, "-h", self.target_ip, "-p", "6379",
                "-n", str(requests), "-r", str(keyspacelen), "-d", str(data_size),
-               "-P", str(pipeline), "-c", str(clients), "-t", command, "--csv"]
+               "-P", str(pipeline), "-c", str(clients), "-t", command, "--seed", str(seed_val), "--csv"]
             
         if tls:
             cmd += ["--tls", "--cert", "./tests/tls/valkey.crt",
