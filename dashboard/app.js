@@ -48,12 +48,15 @@ function Dashboard() {
         const raw    = await fetchJSON(COMPLETED_URL);
         const recent = raw.slice(-100);
 
-        const list = recent.map(c => typeof c === 'string' ? c : c.sha);
+        const list = [];
         const times = {};
         recent.forEach(c => {
-          if (typeof c === 'object' && c.sha && c.timestamp) {
-            times[c.sha] = c.timestamp;
-          }
+          const sha = typeof c === 'string'
+            ? c
+            : (c.sha || c.commit || c.full);
+          if (!sha) return;
+          list.push(sha);
+          if (c.timestamp) times[sha] = c.timestamp;
         });
 
         setCommitTimes(prev => ({ ...prev, ...times }));
@@ -167,7 +170,7 @@ function labelSel(label, val, setter, opts){
 function ShaTick(props) {
   const {x, y, payload} = props;
   const sha = payload.value;
-  const full = payload.payload.full;
+  const full = payload.payload && payload.payload.full ? payload.payload.full : sha;
   return React.createElement('g', {transform:`translate(${x},${y})`},
     React.createElement('a', {href: COMMIT_URL(full), target:'_blank', rel:'noopener noreferrer'},
       React.createElement('text', {x:0, y:0, dy:16, textAnchor:'end', transform:'rotate(-45)', style:{cursor:'pointer'}}, sha)
