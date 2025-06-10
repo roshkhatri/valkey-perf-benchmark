@@ -40,6 +40,17 @@ function Dashboard() {
   const [cluster, setCluster]         = React.useState("all"); // all/true/false
   const [tls, setTLS]                 = React.useState("all"); // all/true/false
   const [metricKey, setMetricKey]     = React.useState("rps");
+  const [pipeline, setPipeline]       = React.useState("all");
+  const [dataSize, setDataSize]       = React.useState("all");
+  const [selectedCommands, setSelectedCommands] = React.useState(new Set());
+
+  function toggleCommand(cmd) {
+    setSelectedCommands(prev => {
+      const next = new Set(prev);
+      if (next.has(cmd)) next.delete(cmd); else next.add(cmd);
+      return next;
+    });
+  }
 
   // 1) periodically refresh commit list
   React.useEffect(() => {
@@ -103,8 +114,21 @@ function Dashboard() {
   // 2) fetch metrics for each commit
   React.useEffect(() => { if (commits.length) loadMetrics(); }, [commits, loadMetrics]);
 
-  // unique command list
+  // unique values for filters
   const commands = React.useMemo(() => [...new Set(metrics.map(m => m.command))].sort(), [metrics]);
+  const pipelines = React.useMemo(
+    () => [...new Set(metrics.map(m => m.pipeline))].sort((a,b)=>a-b),
+    [metrics]
+  );
+  const dataSizes = React.useMemo(
+    () => [...new Set(metrics.map(m => m.data_size))].sort((a,b)=>a-b),
+    [metrics]
+  );
+
+  // when command list changes, select all by default
+  React.useEffect(() => {
+    setSelectedCommands(new Set(commands));
+  }, [commands]);
 
   // regroup per command → series of commit metrics
   const seriesByCommand = React.useMemo(() => {
@@ -112,8 +136,10 @@ function Dashboard() {
     commands.forEach(cmd => {
       const rows = metrics.filter(r =>
         r.command === cmd &&
-        (cluster === "all" || r.cluster_mode === (cluster === "true")) &&
-        (tls     === "all" || r.tls          === (tls === "true"))
+        (cluster  === "all" || r.cluster_mode === (cluster === "true")) &&
+        (tls      === "all" || r.tls          === (tls === "true")) &&
+        (pipeline === "all" || r.pipeline    === Number(pipeline)) &&
+        (dataSize === "all" || r.data_size   === Number(dataSize))
       );
       map[cmd] = commits.map(sha => {
         const row = rows.find(r => r.sha === sha);
@@ -126,17 +152,30 @@ function Dashboard() {
       });
     });
     return map;
-  }, [metrics, commands, commits, cluster, tls, metricKey, commitTimes]);
+  }, [metrics, commands, commits, cluster, tls, pipeline, dataSize, metricKey, commitTimes]);
 
   const children = [
     // Controls -----------------------------------------------------------
     React.createElement('div', {className:'flex flex-wrap gap-4 justify-center'},
       labelSel('Cluster', cluster, setCluster, ['all','true','false']),
       labelSel('TLS',     tls,     setTLS,     ['all','true','false']),
+      labelSel('Pipeline', pipeline, setPipeline, ['all', ...pipelines.map(p=>String(p))]),
+      labelSel('Data Size', dataSize, setDataSize, ['all', ...dataSizes.map(d=>String(d))]),
       labelSel('Metric',  metricKey,setMetricKey, ['rps','avg_latency_ms','p95_latency_ms','p99_latency_ms'])
     ),
+    React.createElement('div', {className:'flex flex-wrap gap-2 justify-center'},
+      ...commands.map(cmd => React.createElement('label', {key:cmd, className:'flex items-center'},
+        React.createElement('input', {
+          type:'checkbox',
+          className:'mr-1',
+          checked: selectedCommands.has(cmd),
+          onChange:()=>toggleCommand(cmd)
+        }),
+        cmd
+      ))
+    ),
     // One chart per command ---------------------------------------------
-    ...commands.map(cmd => React.createElement('div', {key:cmd, className:'bg-white rounded shadow p-2 w-full max-w-4xl'},
+    ...commands.filter(c=>selectedCommands.has(c)).map(cmd => React.createElement('div', {key:cmd, className:'bg-white rounded shadow p-2 w-full max-w-4xl'},
       React.createElement('div', {className:'font-semibold mb-2'}, cmd),
       React.createElement(ResponsiveContainer, {width:'100%', height:400},
         React.createElement(LineChart, {data: seriesByCommand[cmd]},
@@ -160,7 +199,7 @@ function Dashboard() {
 }
 
 function labelSel(label, val, setter, opts){
-  return React.createElement('label', {className:'font-medium'}, `${label}:`,
+  return React.createElement('label', {className:'font-medium inline-flex items-center'}, `${label}:`,
     React.createElement('select', {className:'border rounded p-1 ml-2', value:val, onChange:e=>setter(e.target.value)},
       opts.map(o=>React.createElement('option',{key:o,value:o},o))
     )
