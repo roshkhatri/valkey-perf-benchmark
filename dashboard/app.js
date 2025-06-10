@@ -1,6 +1,6 @@
 /* app.js — Valkey benchmark dashboard for last 100 commits
    Features:
-   • Fetch last 100 commit SHAs from completed_commits.json
+   • Fetch last 100 commit SHAs from completed_commits.json (including status)
    • Load metrics.json for each commit in parallel
    • Filter by cluster_mode and tls
    • Display separate trend charts for each command over the last commits
