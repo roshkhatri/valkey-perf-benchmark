@@ -81,6 +81,21 @@ jobs:
               [[ ${#to_benchmark[@]} -ge $MAX_COMMITS ]] && break
             done
             echo "commit_ids=${to_benchmark[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Mark commits as in progress
+        working-directory: valkey
+        run: |
+          cp completed_commits.json temp.json 2>/dev/null || echo '[]' > temp.json
+          for sha in ${{ steps.determine_commits.outputs.commit_ids }}; do
+            ts=$(git show -s --format=%cI "$sha")
+            if jq -e '.[] | select(.sha=="'$sha'")' temp.json > /dev/null; then
+              jq 'map(if .sha=="'$sha'" then .status="in_progress" else . end)' temp.json > updated.json && mv updated.json temp.json
+            else
+              jq ". + [{\"sha\":\"$sha\",\"timestamp\":\"$ts\",\"status\":\"in_progress\"}]" temp.json > updated.json && mv updated.json temp.json
+            fi
+          done
+          mv temp.json completed_commits.json
+          aws s3 cp completed_commits.json "s3://${{ secrets.AWS_S3_BUCKET }}/completed_commits.json"
   
       - name: benchmark_commits
         working-directory: valkey-perf-benchmark
@@ -112,18 +127,13 @@ jobs:
       - name: Update completed_commits.json
         working-directory: valkey
         run: |
-          # Read existing completed commits
-          if [[ -f completed_commits.json ]]; then
-            jq '.' completed_commits.json > temp.json
-          else
-            echo '[]' > temp.json
-          fi
-
-          # Add new commits with timestamp
+          cp completed_commits.json temp.json 2>/dev/null || echo '[]' > temp.json
           for sha in ${{ steps.determine_commits.outputs.commit_ids }}; do
-            if ! jq -e '.[] | select(.sha=="'"$sha"'")' temp.json > /dev/null; then
-              ts=$(git show -s --format=%cI "$sha")
-              jq ". + [{\"sha\":\"$sha\",\"timestamp\":\"$ts\"}]" temp.json > updated.json && mv updated.json temp.json
+            ts=$(git show -s --format=%cI "$sha")
+            if jq -e '.[] | select(.sha=="'$sha'")' temp.json > /dev/null; then
+              jq 'map(if .sha=="'$sha'" then .status="complete" else . end)' temp.json > updated.json && mv updated.json temp.json
+            else
+              jq ". + [{\"sha\":\"$sha\",\"timestamp\":\"$ts\",\"status\":\"complete\"}]" temp.json > updated.json && mv updated.json temp.json
             fi
           done
 
