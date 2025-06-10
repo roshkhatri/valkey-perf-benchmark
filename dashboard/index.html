@@ -6,8 +6,11 @@
 
 
   <!-- Tailwind for quick styling -->
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3/dist/tailwind.min.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
 
   <!-- React & Recharts (UMD bundles) -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -20,8 +23,8 @@
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col items-center">
 
-  <header class="bg-gray-900 text-white p-4 w-full text-center">
-    <h1 class="text-2xl font-bold">Valkey Continuous Benchmark</h1>
+  <header class="bg-gradient-to-r from-red-700 to-purple-700 text-white p-6 w-full text-center shadow">
+    <h1 class="text-3xl font-bold">Valkey Continuous Benchmark</h1>
   </header>
 
   <!-- Chart placeholder -->
