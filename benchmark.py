@@ -184,10 +184,6 @@ def main() -> None:
         for commit in commits:
             run_benchmark_matrix(commit_id=commit, cfg=cfg, args=args)
 
-    if args.baseline:
-        Logger.info("Pending implement baseline comparison.")
-
-
 if __name__ == "__main__":
     main()
 
