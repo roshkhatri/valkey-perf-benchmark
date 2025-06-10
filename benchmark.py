@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Command-line interface to run Valkey benchmarks."""
+
 import argparse
 import json
 import logging
@@ -26,7 +28,8 @@ REQUIRED_KEYS = [
 
 
 # ---------- CLI --------------------------------------------------------------
-def parse_args():
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Valkey Benchmarking Tool", allow_abbrev=False
     )
@@ -91,12 +94,14 @@ def parse_args():
 
 # ---------- Helpers ----------------------------------------------------------
 def validate_config(cfg: dict) -> None:
+    """Ensure all required keys exist in ``cfg``."""
     for k in REQUIRED_KEYS:
         if k not in cfg:
             raise ValueError(f"Missing required config key: {k}")
 
 
 def load_configs(path: str) -> List[dict]:
+    """Load benchmark configurations from a JSON file."""
     with open(path, "r") as fp:
         configs = json.load(fp)
     for c in configs:
@@ -105,12 +110,14 @@ def load_configs(path: str) -> List[dict]:
 
 
 def ensure_results_dir(root: Path, commit_id: str) -> Path:
+    """Return directory path for a commit's results."""
     d = root / commit_id
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
+    """Run benchmarks for all tls and cluster mode combinations."""
     results_dir = ensure_results_dir(args.results_dir, commit_id)
     Logger.init_logging(results_dir / "logs.txt")
     logging.getLogger().setLevel(args.log_level)
@@ -158,6 +165,7 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
 
 # ---------- Entry point ------------------------------------------------------
 def main() -> None:
+    """Entry point for the benchmark CLI."""
     args = parse_args()
 
     if args.use_running_server and args.mode in ("server", "both"):
@@ -182,3 +190,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

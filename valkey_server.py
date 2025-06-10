@@ -1,6 +1,9 @@
+"""Launch local Valkey servers for benchmark runs."""
+
+import os
 import subprocess
 import time
-import os
+from typing import Iterable
 
 from logger import Logger
 
@@ -9,16 +12,20 @@ VALKEY_CLI = "src/valkey-cli"
 
 
 class ServerLauncher:
-    def __init__(self, commit_id, valkey_path="../valkey"):
+    """Manage Valkey server instances."""
+
+    def __init__(self, commit_id: str, valkey_path: str = "../valkey") -> None:
         self.commit_id = commit_id
         self.valkey_path = valkey_path
 
-    def launch_all_servers(self, cluster_mode, tls_mode):
+    def launch_all_servers(self, cluster_mode: str, tls_mode: str) -> None:
+        """Start a server and optionally configure cluster mode."""
         self._launch_server(tls_mode=tls_mode, cluster_mode=cluster_mode)
         if cluster_mode == "yes":
             self._setup_cluster(tls_mode=tls_mode)
 
-    def _run(self, command, check=True):
+    def _run(self, command: Iterable[str], check: bool = True) -> None:
+        """Execute a command with optional check."""
         try:
             Logger.info(f"Running: {' '.join(command)}")
             subprocess.run(command, check=check)
@@ -27,7 +34,8 @@ class ServerLauncher:
         except Exception as e:
             Logger.error(f"An error occurred: {e}")
 
-    def _launch_server(self, tls_mode, cluster_mode):
+    def _launch_server(self, tls_mode: str, cluster_mode: str) -> None:
+        """Start a Valkey server instance."""
         log_file = f"results/{self.commit_id}/valkey_log_cluster_{'enabled' if (cluster_mode == 'yes') else 'disabled'}.log"
 
         if tls_mode == "yes":
@@ -87,7 +95,8 @@ class ServerLauncher:
         )
         time.sleep(3)
 
-    def _setup_cluster(self, tls_mode):
+    def _setup_cluster(self, tls_mode: str) -> None:
+        """Configure a single instance cluster."""
         Logger.info("Setting up cluster configuration...")
         time.sleep(2)
 
@@ -110,3 +119,4 @@ class ServerLauncher:
         time.sleep(2)
         self._run(add_slots_cmd)
         time.sleep(2)
+

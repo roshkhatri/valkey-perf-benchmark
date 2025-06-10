@@ -1,10 +1,14 @@
-import subprocess
-import time
+"""Client-side benchmark execution logic."""
+
 import json
 import os
 import random
+import subprocess
+import time
 from itertools import product
 from pathlib import Path
+from typing import Iterable, List
+
 from process_metrics import MetricsProcessor
 from logger import Logger
 
@@ -13,16 +17,18 @@ VALKEY_BENCHMARK = "src/valkey-benchmark"
 
 
 class ClientRunner:
+    """Run ``valkey-benchmark`` for a given commit and configuration."""
+
     def __init__(
         self,
-        commit_id,
-        config,
-        cluster_mode,
-        tls_mode,
-        target_ip,
-        results_dir,
-        valkey_path,
-    ):
+        commit_id: str,
+        config: dict,
+        cluster_mode: str,
+        tls_mode: str,
+        target_ip: str,
+        results_dir: Path,
+        valkey_path: str,
+    ) -> None:
         self.commit_id = commit_id
         self.config = config
         self.cluster_mode = True if cluster_mode == "yes" else False
@@ -33,7 +39,8 @@ class ClientRunner:
         self.valkey_cli = f"{valkey_path}/{VALKEY_CLI}"
         self.valkey_benchmark = f"{valkey_path}/{VALKEY_BENCHMARK}"
 
-    def ping_server(self):
+    def ping_server(self) -> None:
+        """Verify the target server is reachable."""
         try:
             cmd = [self.valkey_cli, "-h", self.target_ip, "-p", "6379", "ping"]
             Logger.info(f"Running: {' '.join(cmd)}")
@@ -63,7 +70,8 @@ class ClientRunner:
             Logger.error(f"Failed to get commit time for {commit_id}: {e}")
             return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-    def run_benchmark_config(self):
+    def run_benchmark_config(self) -> None:
+        """Execute benchmarks for all configuration combinations."""
         commit_time = self.get_commit_time(self.commit_id)
         metrics_processor = MetricsProcessor(
             self.commit_id, self.cluster_mode, self.tls_mode, commit_time
@@ -160,7 +168,9 @@ class ClientRunner:
 
         metrics_processor.write_metrics(self.results_dir, metric_json)
 
-    def _generate_combinations(self):
+    def _generate_combinations(self) -> List[tuple]:
+        """Return Cartesian product of configuration options."""
+
         return list(
             product(
                 self.config["requests"],
@@ -173,7 +183,9 @@ class ClientRunner:
             )
         )
 
-    def _build_cli_command(self, tls):
+    def _build_cli_command(self, tls: bool) -> List[str]:
+        """Build a ``valkey-cli`` command."""
+
         cmd = [self.valkey_cli, "-h", self.target_ip, "-p", "6379"]
         if tls:
             cmd += [
@@ -189,15 +201,16 @@ class ClientRunner:
 
     def _build_benchmark_command(
         self,
-        tls,
-        requests,
-        keyspacelen,
-        data_size,
-        pipeline,
-        clients,
-        command,
-        seed_val,
-    ):
+        tls: bool,
+        requests: int,
+        keyspacelen: int,
+        data_size: int,
+        pipeline: int,
+        clients: int,
+        command: str,
+        seed_val: int,
+    ) -> List[str]:
+        """Construct the ``valkey-benchmark`` command line."""
         cmd = [
             self.valkey_benchmark,
             "-h",
@@ -233,7 +246,9 @@ class ClientRunner:
             ]
         return cmd
 
-    def _run(self, cmd):
+    def _run(self, cmd: Iterable[str]) -> None:
+        """Execute a command and log failures."""
+
         try:
             Logger.info(f"Running: {' '.join(cmd)}")
             subprocess.run(cmd, check=True)
@@ -241,3 +256,4 @@ class ClientRunner:
             Logger.error(f"Command failed with error: {e}")
         except Exception as e:
             Logger.error(f"An error occurred: {e}")
+
