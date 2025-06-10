@@ -44,7 +44,7 @@ class MetricsProcessor:
             "p99_latency_ms": float(data.get("p99_latency_ms", 0)),
             "max_latency_ms": float(data.get("max_latency_ms", 0)),
             "cluster_mode": self.cluster_mode,
-            "tls": self.tls_mode
+            "tls": self.tls_mode,
         }
 
     def write_metrics(self, results_dir, new_metrics):
@@ -59,7 +59,9 @@ class MetricsProcessor:
                 with metrics_file.open("r", encoding="utf-8") as f:
                     metrics = json.load(f)
             except json.JSONDecodeError:
-                Logger.warning(f"Could not decode JSON from {metrics_file}, starting fresh.")
+                Logger.warning(
+                    f"Could not decode JSON from {metrics_file}, starting fresh."
+                )
 
         # Extend metrics with new_metrics as it's a list.
         metrics.extend(new_metrics)

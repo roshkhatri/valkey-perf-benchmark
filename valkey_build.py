@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 from logger import Logger
 
+
 class ServerBuilder:
     def __init__(self, commit_id, tls_mode, valkey_path):
         self.commit_id = commit_id
@@ -20,22 +21,23 @@ class ServerBuilder:
         except Exception as e:
             Logger.error(f"An error occurred: {e}")
 
-
     def clone_and_checkout(self):
         if not self.valkey_dir.exists():
             Logger.info(f"Cloning Valkey repo into {self.valkey_dir}...")
             self._run(["git", "clone", self.repo_url, str(self.valkey_dir)])
-            
+
         if self.commit_id == "HEAD":
             return
-        
+
         # Checkout specific commit
         Logger.info(f"Checking out commit: {self.commit_id}")
         self._run(["git", "checkout", self.commit_id], cwd=self.valkey_dir)
 
     def build(self):
         self.clone_and_checkout()
-        Logger.info(f"Building with TLS {'enabled' if (self.tls_mode == 'yes') else 'disabled'}")
+        Logger.info(
+            f"Building with TLS {'enabled' if (self.tls_mode == 'yes') else 'disabled'}"
+        )
         self._run(["make", "distclean"], cwd=self.valkey_dir)
         if self.tls_mode == "yes":
             self._run(["make", "BUILD_TLS=yes", "-j"], cwd=self.valkey_dir)

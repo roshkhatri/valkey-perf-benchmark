@@ -7,11 +7,12 @@ from logger import Logger
 VALKEY_SERVER = "src/valkey-server"
 VALKEY_CLI = "src/valkey-cli"
 
+
 class ServerLauncher:
     def __init__(self, commit_id, valkey_path="../valkey"):
         self.commit_id = commit_id
         self.valkey_path = valkey_path
-        
+
     def launch_all_servers(self, cluster_mode, tls_mode):
         self._launch_server(tls_mode=tls_mode, cluster_mode=cluster_mode)
         if cluster_mode == "yes":
@@ -28,36 +29,62 @@ class ServerLauncher:
 
     def _launch_server(self, tls_mode, cluster_mode):
         log_file = f"results/{self.commit_id}/valkey_log_cluster_{'enabled' if (cluster_mode == 'yes') else 'disabled'}.log"
-    
+
         if tls_mode == "yes":
             cmd = [
-                "taskset", "-c", "0-1", f"{self.valkey_path}/{VALKEY_SERVER}",
-                "--tls-port", "6379",
-                "--port", "0",
-                "--tls-cert-file", "./tests/tls/valkey.crt",
-                "--tls-key-file", "./tests/tls/valkey.key",
-                "--tls-ca-cert-file", "./tests/tls/ca.crt",
-                "--daemonize", "yes",
-                "--maxmemory-policy", "allkeys-lru",
-                "--appendonly", "no",
-                "--cluster-enabled", cluster_mode,
-                "--logfile", log_file,
-                "--save", "''"
+                "taskset",
+                "-c",
+                "0-1",
+                f"{self.valkey_path}/{VALKEY_SERVER}",
+                "--tls-port",
+                "6379",
+                "--port",
+                "0",
+                "--tls-cert-file",
+                "./tests/tls/valkey.crt",
+                "--tls-key-file",
+                "./tests/tls/valkey.key",
+                "--tls-ca-cert-file",
+                "./tests/tls/ca.crt",
+                "--daemonize",
+                "yes",
+                "--maxmemory-policy",
+                "allkeys-lru",
+                "--appendonly",
+                "no",
+                "--cluster-enabled",
+                cluster_mode,
+                "--logfile",
+                log_file,
+                "--save",
+                "''",
             ]
         else:
             cmd = [
-                "taskset", "-c", "0-1", f"{self.valkey_path}/{VALKEY_SERVER}",
-                "--port", "6379",
-                "--daemonize", "yes",
-                "--maxmemory-policy", "allkeys-lru",
-                "--appendonly", "no",
-                "--cluster-enabled", cluster_mode,
-                "--logfile", log_file,
-                "--save", "''"
+                "taskset",
+                "-c",
+                "0-1",
+                f"{self.valkey_path}/{VALKEY_SERVER}",
+                "--port",
+                "6379",
+                "--daemonize",
+                "yes",
+                "--maxmemory-policy",
+                "allkeys-lru",
+                "--appendonly",
+                "no",
+                "--cluster-enabled",
+                cluster_mode,
+                "--logfile",
+                log_file,
+                "--save",
+                "''",
             ]
 
         self._run(cmd)
-        Logger.info(f"Started Valkey Server with TLS {'enabled' if (tls_mode == 'yes') else 'disabled'} and Cluster mode {'enabled' if (cluster_mode == 'yes') else 'disabled'} at port 6379")
+        Logger.info(
+            f"Started Valkey Server with TLS {'enabled' if (tls_mode == 'yes') else 'disabled'} and Cluster mode {'enabled' if (cluster_mode == 'yes') else 'disabled'} at port 6379"
+        )
         time.sleep(3)
 
     def _setup_cluster(self, tls_mode):
@@ -68,9 +95,12 @@ class ServerLauncher:
         if tls_mode == "yes":
             base_cmd += [
                 "--tls",
-                "--cert", "./tests/tls/valkey.crt",
-                "--key", "./tests/tls/valkey.key",
-                "--cacert", "./tests/tls/ca.crt"
+                "--cert",
+                "./tests/tls/valkey.crt",
+                "--key",
+                "./tests/tls/valkey.key",
+                "--cacert",
+                "./tests/tls/ca.crt",
             ]
 
         reset_cmd = base_cmd + ["CLUSTER", "RESET", "HARD"]

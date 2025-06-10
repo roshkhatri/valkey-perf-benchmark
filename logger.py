@@ -1,6 +1,7 @@
 import sys
 import logging
 
+
 class Logger:
     _logger = None
 
@@ -9,34 +10,31 @@ class Logger:
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s [%(levelname)s] %(message)s",
-            handlers=[
-                logging.FileHandler(log_path),
-                logging.StreamHandler(sys.stdout)
-            ]
+            handlers=[logging.FileHandler(log_path), logging.StreamHandler(sys.stdout)],
         )
         Logger._logger = logging.getLogger()
         sys.stdout = Logger._StreamToLogger(Logger._logger, logging.INFO)
         sys.stderr = Logger._StreamToLogger(Logger._logger, logging.ERROR)
-    
+
     @staticmethod
     def info(message):
         if Logger._logger:
             Logger._logger.info(message)
         else:
             print(message)
-    
+
     @staticmethod
     def error(message):
         if Logger._logger:
             Logger._logger.error(message)
         else:
             print(f"ERROR: {message}", file=sys.stderr)
-    
+
     @staticmethod
     def debug(message):
         if Logger._logger:
             Logger._logger.debug(message)
-    
+
     @staticmethod
     def warning(message):
         if Logger._logger:

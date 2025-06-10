@@ -24,48 +24,65 @@ REQUIRED_KEYS = [
     "warmup",
 ]
 
+
 # ---------- CLI --------------------------------------------------------------
 def parse_args():
-    parser = argparse.ArgumentParser(description="Valkey Benchmarking Tool", allow_abbrev=False)
-    
-    parser.add_argument("--mode",
-                   choices=["server", "client", "both"],
-                   default="both",
-                   help="Where to run: only server setup, only client tests, or both on one host.")
-    parser.add_argument("--commits",
-                   nargs="+",
-                   default=["HEAD"],
-                   metavar="COMMITS",
-                   help="Git SHA(s) or ref(s) to benchmark (default: HEAD).")
+    parser = argparse.ArgumentParser(
+        description="Valkey Benchmarking Tool", allow_abbrev=False
+    )
+
     parser.add_argument(
-                    "--valkey-path",
-                    type=Path,
-                    default="../valkey",
-                    metavar="PATH",
-                    help="Use this pre-built Valkey directory instead of building from source.")
-    parser.add_argument("--baseline",
-                   default=None,
-                   metavar="REF",
-                   help="Extra commit to include for comparison (e.g. 'unstable').")
+        "--mode",
+        choices=["server", "client", "both"],
+        default="both",
+        help="Where to run: only server setup, only client tests, or both on one host.",
+    )
     parser.add_argument(
-                    "--use-running-server",
-                    action="store_true",
-                    help="Assumes the Valkey servers are already running; "
-                        "skip build / launch / cleanup steps.")
-    parser.add_argument("--target-ip",
-                   default="127.0.0.1",
-                   help="Server IP visible to the client (ignored for --mode=server).")
-    parser.add_argument("--config",
-                   default="./configs/benchmark-configs.json",
-                   help="Path to benchmark-configs.json.")
-    parser.add_argument("--results-dir",
-                   type=Path,
-                   default=DEFAULT_RESULTS_ROOT,
-                   help="Root folder for benchmark outputs.")
-    parser.add_argument("--log-level",
-                   default="INFO",
-                   choices=["DEBUG", "INFO", "WARNING", "ERROR"])
-    
+        "--commits",
+        nargs="+",
+        default=["HEAD"],
+        metavar="COMMITS",
+        help="Git SHA(s) or ref(s) to benchmark (default: HEAD).",
+    )
+    parser.add_argument(
+        "--valkey-path",
+        type=Path,
+        default="../valkey",
+        metavar="PATH",
+        help="Use this pre-built Valkey directory instead of building from source.",
+    )
+    parser.add_argument(
+        "--baseline",
+        default=None,
+        metavar="REF",
+        help="Extra commit to include for comparison (e.g. 'unstable').",
+    )
+    parser.add_argument(
+        "--use-running-server",
+        action="store_true",
+        help="Assumes the Valkey servers are already running; "
+        "skip build / launch / cleanup steps.",
+    )
+    parser.add_argument(
+        "--target-ip",
+        default="127.0.0.1",
+        help="Server IP visible to the client (ignored for --mode=server).",
+    )
+    parser.add_argument(
+        "--config",
+        default="./configs/benchmark-configs.json",
+        help="Path to benchmark-configs.json.",
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=Path,
+        default=DEFAULT_RESULTS_ROOT,
+        help="Root folder for benchmark outputs.",
+    )
+    parser.add_argument(
+        "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
+    )
+
     args, unknown = parser.parse_known_args()
     if unknown:
         parser.error(f"Unrecognized arguments: {' '.join(unknown)}")
@@ -78,6 +95,7 @@ def validate_config(cfg: dict) -> None:
         if k not in cfg:
             raise ValueError(f"Missing required config key: {k}")
 
+
 def load_configs(path: str) -> List[dict]:
     with open(path, "r") as fp:
         configs = json.load(fp)
@@ -85,10 +103,12 @@ def load_configs(path: str) -> List[dict]:
         validate_config(c)
     return configs
 
+
 def ensure_results_dir(root: Path, commit_id: str) -> Path:
     d = root / commit_id
     d.mkdir(parents=True, exist_ok=True)
     return d
+
 
 def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
     results_dir = ensure_results_dir(args.results_dir, commit_id)
@@ -96,8 +116,9 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
     logging.getLogger().setLevel(args.log_level)
 
     for tls_mode in cfg["tls_modes"]:
-        builder = ServerBuilder(commit_id=commit_id, tls_mode=tls_mode,
-                                        valkey_path=args.valkey_path)
+        builder = ServerBuilder(
+            commit_id=commit_id, tls_mode=tls_mode, valkey_path=args.valkey_path
+        )
         if not args.use_running_server:
             builder.build()
         else:
@@ -118,7 +139,6 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
                     cluster_mode=cluster_mode,
                     tls_mode=tls_mode,
                 )
-
 
             if args.mode in ("client", "both"):
                 runner = ClientRunner(
@@ -141,10 +161,10 @@ def main() -> None:
     args = parse_args()
 
     if args.use_running_server and args.mode in ("server", "both"):
-            Logger.error(
-                "ERROR: --use-running-server implies the valkey is already build and running, "
-                "so --mode must be 'client'."
-            )
+        Logger.error(
+            "ERROR: --use-running-server implies the valkey is already build and running, "
+            "so --mode must be 'client'."
+        )
     print(args)
 
     commits = args.commits.copy()
@@ -155,9 +175,10 @@ def main() -> None:
         Logger.info(f"Loaded config: {cfg}")
         for commit in commits:
             run_benchmark_matrix(commit_id=commit, cfg=cfg, args=args)
-            
+
     if args.baseline:
         Logger.info("Pending implement baseline comparison.")
+
 
 if __name__ == "__main__":
     main()
