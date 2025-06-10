@@ -55,7 +55,7 @@ function Dashboard() {
     });
   }
 
-  // 1) periodically refresh commit list
+  // 1) load commit list once on mount
   React.useEffect(() => {
     async function refresh() {
       try {
@@ -84,8 +84,6 @@ function Dashboard() {
       }
     }
     refresh();
-    const id = setInterval(refresh, 60000);
-    return () => clearInterval(id);
   }, []);
 
   const loadMetrics = React.useCallback(async () => {
