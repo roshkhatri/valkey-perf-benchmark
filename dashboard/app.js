@@ -1,9 +1,9 @@
-/* app.js — Valkey benchmark dashboard for last 100 commits
+/* app.js — Valkey benchmark dashboard for all recorded commits
    Features:
-   • Fetch last 100 commit SHAs from completed_commits.json (including status)
+   • Fetch commit SHAs from completed_commits.json (including status)
    • Load metrics.json for each commit in parallel
    • Filter by cluster_mode and tls
-   • Display separate trend charts for each command over the last commits
+   • Display separate trend charts for each command over the available commits
 */
 
 /* global React, ReactDOM, Recharts */
@@ -59,12 +59,11 @@ function Dashboard() {
   React.useEffect(() => {
     async function refresh() {
       try {
-        const raw    = await fetchJSON(COMPLETED_URL);
-        const recent = raw.slice(-100);
+        const raw = await fetchJSON(COMPLETED_URL);
 
         const list = [];
         const times = {};
-        recent.forEach(c => {
+        raw.forEach(c => {
           const sha = typeof c === 'string'
             ? c
             : (c.sha || c.commit || c.full);
@@ -117,7 +116,7 @@ function Dashboard() {
   // 2) fetch metrics for each commit
   React.useEffect(() => { if (commits.length) loadMetrics(); }, [commits, loadMetrics]);
 
-  // initialize date range when commit times become available
+  // ensure the date range includes all commit times
   React.useEffect(() => {
     if (!commits.length) return;
     const times = commits
@@ -127,8 +126,10 @@ function Dashboard() {
     if (!times.length) return;
     const min = new Date(Math.min.apply(null, times));
     const max = new Date(Math.max.apply(null, times));
-    if (!fromDate) setFromDate(min.toISOString().slice(0, 10));
-    if (!toDate) setToDate(max.toISOString().slice(0, 10));
+    const minStr = min.toISOString().slice(0, 10);
+    const maxStr = max.toISOString().slice(0, 10);
+    setFromDate(d => (!d || new Date(d) > min) ? minStr : d);
+    setToDate(d => (!d || new Date(d) < max) ? maxStr : d);
   }, [commits, commitTimes]);
 
   // unique values for filters
