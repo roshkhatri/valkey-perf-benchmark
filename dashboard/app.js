@@ -125,9 +125,15 @@ function Dashboard() {
     [metrics]
   );
 
-  // when command list changes, select all by default
+  // when command list changes, keep user selections but
+  // automatically include any new commands that appear
   React.useEffect(() => {
-    setSelectedCommands(new Set(commands));
+    setSelectedCommands(prev => {
+      if (!prev.size) return new Set(commands);
+      const next = new Set([...prev].filter(c => commands.includes(c)));
+      commands.forEach(c => { if (!prev.has(c)) next.add(c); });
+      return next;
+    });
   }, [commands]);
 
   // regroup per command → series of commit metrics
