@@ -43,6 +43,9 @@ function Dashboard() {
   const [pipeline, setPipeline]       = React.useState("all");
   const [dataSize, setDataSize]       = React.useState("all");
   const [selectedCommands, setSelectedCommands] = React.useState(new Set());
+  const [fromDate, setFromDate]       = React.useState("");
+  const [toDate, setToDate]           = React.useState("");
+  const [brushRange, setBrushRange]   = React.useState(null);
 
   function toggleCommand(cmd) {
     setSelectedCommands(prev => {
@@ -114,6 +117,20 @@ function Dashboard() {
   // 2) fetch metrics for each commit
   React.useEffect(() => { if (commits.length) loadMetrics(); }, [commits, loadMetrics]);
 
+  // initialize date range when commit times become available
+  React.useEffect(() => {
+    if (!commits.length) return;
+    const times = commits
+      .map(s => commitTimes[s])
+      .filter(Boolean)
+      .map(t => new Date(t));
+    if (!times.length) return;
+    const min = new Date(Math.min.apply(null, times));
+    const max = new Date(Math.max.apply(null, times));
+    if (!fromDate) setFromDate(min.toISOString().slice(0, 10));
+    if (!toDate) setToDate(max.toISOString().slice(0, 10));
+  }, [commits, commitTimes]);
+
   // unique values for filters
   const commands = React.useMemo(() => [...new Set(metrics.map(m => m.command))].sort(), [metrics]);
   const pipelines = React.useMemo(
@@ -125,14 +142,33 @@ function Dashboard() {
     [metrics]
   );
 
-  // when command list changes, keep user selections but
-  // automatically include any new commands that appear
+  const filteredCommits = React.useMemo(() =>
+    commits.filter(sha => {
+      const ts = commitTimes[sha];
+      if (!ts) return true;
+      if (fromDate && new Date(ts) < new Date(fromDate)) return false;
+      if (toDate && new Date(ts) > new Date(toDate)) return false;
+      return true;
+    }),
+    [commits, commitTimes, fromDate, toDate]
+  );
+
+  React.useEffect(() => {
+    if (!filteredCommits.length) return;
+    setBrushRange(range => {
+      if (!range) return { startIndex: 0, endIndex: filteredCommits.length - 1 };
+      const start = Math.max(0, Math.min(range.startIndex, filteredCommits.length - 1));
+      const end = Math.max(start, Math.min(range.endIndex, filteredCommits.length - 1));
+      return { startIndex: start, endIndex: end };
+    });
+  }, [filteredCommits.length]);
+
+  // when command list changes keep existing selections but avoid
+  // re-enabling commands the user unchecked
   React.useEffect(() => {
     setSelectedCommands(prev => {
       if (!prev.size) return new Set(commands);
-      const next = new Set([...prev].filter(c => commands.includes(c)));
-      commands.forEach(c => { if (!prev.has(c)) next.add(c); });
-      return next;
+      return new Set([...prev].filter(c => commands.includes(c)));
     });
   }, [commands]);
 
@@ -147,7 +183,7 @@ function Dashboard() {
         (pipeline === "all" || r.pipeline    === Number(pipeline)) &&
         (dataSize === "all" || r.data_size   === Number(dataSize))
       );
-      map[cmd] = commits.map(sha => {
+      map[cmd] = filteredCommits.map(sha => {
         const row = rows.find(r => r.sha === sha);
         return {
           sha: sha.slice(0,8),
@@ -158,7 +194,16 @@ function Dashboard() {
       });
     });
     return map;
-  }, [metrics, commands, commits, cluster, tls, pipeline, dataSize, metricKey, commitTimes]);
+  }, [metrics, commands, filteredCommits, cluster, tls, pipeline, dataSize, metricKey, commitTimes]);
+
+  const displaySeriesByCommand = React.useMemo(() => {
+    if (!brushRange) return seriesByCommand;
+    const map = {};
+    Object.entries(seriesByCommand).forEach(([cmd, data]) => {
+      map[cmd] = data.slice(brushRange.startIndex, brushRange.endIndex + 1);
+    });
+    return map;
+  }, [seriesByCommand, brushRange]);
 
   const children = [
     // Controls -----------------------------------------------------------
@@ -167,7 +212,9 @@ function Dashboard() {
       labelSel('TLS',     tls,     setTLS,     ['all','true','false']),
       labelSel('Pipeline', pipeline, setPipeline, ['all', ...pipelines.map(p=>String(p))]),
       labelSel('Data Size', dataSize, setDataSize, ['all', ...dataSizes.map(d=>String(d))]),
-      labelSel('Metric',  metricKey,setMetricKey, ['rps','avg_latency_ms','p95_latency_ms','p99_latency_ms'])
+      labelSel('Metric',  metricKey,setMetricKey, ['rps','avg_latency_ms','p95_latency_ms','p99_latency_ms']),
+      labelDate('From', fromDate, setFromDate),
+      labelDate('To',   toDate,   setToDate)
     ),
     React.createElement('div', {className:'flex flex-wrap gap-2 justify-center'},
       ...commands.map(cmd => React.createElement('label', {key:cmd, className:'flex items-center'},
@@ -184,7 +231,7 @@ function Dashboard() {
     ...commands.filter(c=>selectedCommands.has(c)).map(cmd => React.createElement('div', {key:cmd, className:'bg-white rounded shadow p-2 w-full max-w-4xl'},
       React.createElement('div', {className:'font-semibold mb-2'}, cmd),
       React.createElement(ResponsiveContainer, {width:'100%', height:400},
-        React.createElement(LineChart, {data: seriesByCommand[cmd]},
+        React.createElement(LineChart, {data: displaySeriesByCommand[cmd]},
           React.createElement(CartesianGrid, {strokeDasharray:'3 3'}),
           React.createElement(XAxis, {
             dataKey:'sha',
@@ -194,7 +241,13 @@ function Dashboard() {
           }),
           React.createElement(YAxis),
           React.createElement(Tooltip),
-          React.createElement(Brush, {dataKey:'sha'}),
+          React.createElement(Brush, {
+            dataKey:'timestamp',
+            startIndex: brushRange ? brushRange.startIndex : 0,
+            endIndex: brushRange ? brushRange.endIndex : (filteredCommits.length - 1),
+            tickFormatter: t => t ? String(t).slice(0,10) : '',
+            onChange: r => setBrushRange(r)
+          }),
           React.createElement(Line, {type:'monotone', dataKey:'value', stroke:'#3b82f6', dot:false, name: metricKey })
         )
       )
@@ -209,6 +262,12 @@ function labelSel(label, val, setter, opts){
     React.createElement('select', {className:'border rounded p-1 ml-2', value:val, onChange:e=>setter(e.target.value)},
       opts.map(o=>React.createElement('option',{key:o,value:o},o))
     )
+  );
+}
+
+function labelDate(label, val, setter){
+  return React.createElement('label', {className:'font-medium inline-flex items-center'}, `${label}:`,
+    React.createElement('input', {type:'date', className:'border rounded p-1 ml-2', value:val, onChange:e=>setter(e.target.value)})
   );
 }
 
