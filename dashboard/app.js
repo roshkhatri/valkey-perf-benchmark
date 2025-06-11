@@ -238,8 +238,8 @@ function Dashboard() {
       labelSel('Pipeline', pipeline, setPipeline, ['all', ...pipelines.map(p=>String(p))]),
       labelSel('Data Size', dataSize, setDataSize, ['all', ...dataSizes.map(d=>String(d))]),
       labelSel('Metric',  metricKey,setMetricKey, ['rps','avg_latency_ms','p95_latency_ms','p99_latency_ms']),
-      labelDate('From', fromDate, v => { setFromDate(v); setFromDateUser(true); }),
-      labelDate('To',   toDate,   v => { setToDate(v);   setToDateUser(true);   })
+      labelDate('From', fromDate, v => { setFromDate(v); setFromDateUser(true); }, brushStartDate),
+      labelDate('To',   toDate,   v => { setToDate(v);   setToDateUser(true);   }, brushEndDate)
     ),
     React.createElement('div', {className:'flex flex-wrap gap-2 justify-center'},
       ...commands.map(cmd => React.createElement('label', {key:cmd, className:'flex items-center'},
@@ -294,9 +294,10 @@ function labelSel(label, val, setter, opts){
   );
 }
 
-function labelDate(label, val, setter){
+function labelDate(label, val, setter, brushVal){
   return React.createElement('label', {className:'font-medium inline-flex items-center'}, `${label}:`,
-    React.createElement('input', {type:'date', className:'border rounded p-1 ml-2', value:val, onChange:e=>setter(e.target.value)})
+    React.createElement('input', {type:'date', className:'border rounded p-1 ml-2', value:val, onChange:e=>setter(e.target.value)}),
+    brushVal ? React.createElement('span', {className:'ml-2 text-xs text-gray-600'}, brushVal) : null
   );
 }
 
