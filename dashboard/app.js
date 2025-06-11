@@ -179,6 +179,20 @@ function Dashboard() {
     });
   }, [filteredCommits]);
 
+  const brushStartDate = React.useMemo(() => {
+    if (!brushRange || !filteredCommits.length) return null;
+    const sha = filteredCommits[brushRange.startIndex];
+    const ts = commitTimes[sha];
+    return ts ? String(ts).slice(0, 10) : null;
+  }, [brushRange, filteredCommits, commitTimes]);
+
+  const brushEndDate = React.useMemo(() => {
+    if (!brushRange || !filteredCommits.length) return null;
+    const sha = filteredCommits[brushRange.endIndex];
+    const ts = commitTimes[sha];
+    return ts ? String(ts).slice(0, 10) : null;
+  }, [brushRange, filteredCommits, commitTimes]);
+
   // when command list changes keep existing selections but avoid
   // re-enabling commands the user unchecked
   React.useEffect(() => {
@@ -241,6 +255,10 @@ function Dashboard() {
     // One chart per command ---------------------------------------------
     ...commands.filter(c=>selectedCommands.has(c)).map(cmd => React.createElement('div', {key:cmd, className:'bg-white rounded shadow p-2 w-full max-w-4xl'},
       React.createElement('div', {className:'font-semibold mb-2'}, cmd),
+      (brushStartDate && brushEndDate) && React.createElement('div', {className:'flex justify-between text-xs text-gray-600 px-1'},
+        React.createElement('span', null, brushStartDate),
+        React.createElement('span', null, brushEndDate)
+      ),
       React.createElement(ResponsiveContainer, {width:'100%', height:400},
         React.createElement(LineChart, {data: seriesByCommand[cmd]},
           React.createElement(CartesianGrid, {strokeDasharray:'3 3'}),
