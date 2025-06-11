@@ -232,7 +232,7 @@ function Dashboard() {
 
   const children = [
     // Controls -----------------------------------------------------------
-    React.createElement('div', {className:'flex flex-wrap gap-4 justify-center'},
+    React.createElement('div', {className:'flex flex-wrap gap-4 justify-center text-center'},
       labelSel('Cluster', cluster, setCluster, ['all','true','false']),
       labelSel('TLS',     tls,     setTLS,     ['all','true','false']),
       labelSel('Pipeline', pipeline, setPipeline, ['all', ...pipelines.map(p=>String(p))]),
@@ -241,7 +241,7 @@ function Dashboard() {
       labelDate('From', fromDate, v => { setFromDate(v); setFromDateUser(true); }, brushStartDate),
       labelDate('To',   toDate,   v => { setToDate(v);   setToDateUser(true);   }, brushEndDate)
     ),
-    React.createElement('div', {className:'flex flex-wrap gap-2 justify-center'},
+    React.createElement('div', {className:'flex flex-wrap gap-2 justify-center text-center'},
       ...commands.map(cmd => React.createElement('label', {key:cmd, className:'flex items-center'},
         React.createElement('input', {
           type:'checkbox',
@@ -265,7 +265,7 @@ function Dashboard() {
             tick: ShaTick
           }),
           React.createElement(YAxis),
-          React.createElement(Tooltip),
+          React.createElement(Tooltip, {content: CustomTooltip}),
           (filteredCommits.length > 0) && React.createElement(Brush, {
             dataKey:'timestamp',
             startIndex: brushRange ? brushRange.startIndex : 0,
@@ -279,7 +279,7 @@ function Dashboard() {
     ))
   ];
 
-  return React.createElement('div', {className:'space-y-6 w-full flex flex-col items-center'}, ...children);
+  return React.createElement('div', {className:'space-y-6 w-full flex flex-col items-center text-center'}, ...children);
 }
 
 function labelSel(label, val, setter, opts){
@@ -310,6 +310,19 @@ function ShaTick(props) {
     React.createElement('a', {href: COMMIT_URL(full), target:'_blank', rel:'noopener noreferrer'},
       React.createElement('text', {x:0, y:0, dy:16, textAnchor:'end', transform:'rotate(-45)', style:{cursor:'pointer'}}, sha)
     )
+  );
+}
+
+function CustomTooltip(props) {
+  const {active, payload} = props;
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0].payload || {};
+  const time = data.timestamp ? new Date(data.timestamp).toLocaleString() : '';
+  const name = payload[0].name;
+  const value = payload[0].value;
+  return React.createElement('div', {className:'bg-white p-2 border rounded shadow text-sm'},
+    React.createElement('div', null, time),
+    React.createElement('div', null, `${name}: ${value}`)
   );
 }
 
