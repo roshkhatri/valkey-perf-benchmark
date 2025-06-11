@@ -45,6 +45,8 @@ function Dashboard() {
   const [selectedCommands, setSelectedCommands] = React.useState(new Set());
   const [fromDate, setFromDate]       = React.useState("");
   const [toDate, setToDate]           = React.useState("");
+  const [fromDateUser, setFromDateUser] = React.useState(false);
+  const [toDateUser, setToDateUser]     = React.useState(false);
   const [brushRange, setBrushRange]   = React.useState(null);
 
   function toggleCommand(cmd) {
@@ -126,9 +128,13 @@ function Dashboard() {
     const max = new Date(Math.max.apply(null, times));
     const minStr = min.toISOString().slice(0, 10);
     const maxStr = max.toISOString().slice(0, 10);
-    setFromDate(d => (!d || new Date(d) > min) ? minStr : d);
-    setToDate(d => (!d || new Date(d) < max) ? maxStr : d);
-  }, [commits, commitTimes]);
+    if (!fromDateUser) {
+      setFromDate(d => (!d || new Date(d) > min) ? minStr : d);
+    }
+    if (!toDateUser) {
+      setToDate(d => (!d || new Date(d) < max) ? maxStr : d);
+    }
+  }, [commits, commitTimes, fromDateUser, toDateUser]);
 
   // unique values for filters
   const commands = React.useMemo(() => [...new Set(metrics.map(m => m.command))].sort(), [metrics]);
@@ -212,8 +218,8 @@ function Dashboard() {
       labelSel('Pipeline', pipeline, setPipeline, ['all', ...pipelines.map(p=>String(p))]),
       labelSel('Data Size', dataSize, setDataSize, ['all', ...dataSizes.map(d=>String(d))]),
       labelSel('Metric',  metricKey,setMetricKey, ['rps','avg_latency_ms','p95_latency_ms','p99_latency_ms']),
-      labelDate('From', fromDate, setFromDate),
-      labelDate('To',   toDate,   setToDate)
+      labelDate('From', fromDate, v => { setFromDate(v); setFromDateUser(true); }),
+      labelDate('To',   toDate,   v => { setToDate(v);   setToDateUser(true);   })
     ),
     React.createElement('div', {className:'flex flex-wrap gap-2 justify-center'},
       ...commands.map(cmd => React.createElement('label', {key:cmd, className:'flex items-center'},
