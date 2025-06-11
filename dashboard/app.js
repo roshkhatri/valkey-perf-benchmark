@@ -1,6 +1,7 @@
 /* app.js — Valkey benchmark dashboard for all recorded commits
    Features:
-   • Fetch commit SHAs from completed_commits.json (including status)
+   • Fetch commit SHAs from completed_commits.json
+     (ignoring entries with status "in_progress")
    • Load metrics.json for each commit in parallel
    • Filter by cluster_mode and tls
    • Display separate trend charts for each command over the available commits
@@ -66,6 +67,7 @@ function Dashboard() {
         const list = [];
         const times = {};
         raw.forEach(c => {
+          if (typeof c === 'object' && c.status === 'in_progress') return;
           const sha = typeof c === 'string'
             ? c
             : (c.sha || c.commit || c.full);
