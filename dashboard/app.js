@@ -212,14 +212,9 @@ function Dashboard() {
     return map;
   }, [metrics, commands, filteredCommits, cluster, tls, pipeline, dataSize, metricKey, commitTimes]);
 
-  const displaySeriesByCommand = React.useMemo(() => {
-    if (!brushRange) return seriesByCommand;
-    const map = {};
-    Object.entries(seriesByCommand).forEach(([cmd, data]) => {
-      map[cmd] = data.slice(brushRange.startIndex, brushRange.endIndex + 1);
-    });
-    return map;
-  }, [seriesByCommand, brushRange]);
+  // The full seriesByCommand data is fed into each chart so the Brush component
+  // can control the visible range.  Recharts will automatically display only
+  // the selected slice based on `startIndex` and `endIndex` provided to Brush.
 
   const children = [
     // Controls -----------------------------------------------------------
@@ -247,7 +242,7 @@ function Dashboard() {
     ...commands.filter(c=>selectedCommands.has(c)).map(cmd => React.createElement('div', {key:cmd, className:'bg-white rounded shadow p-2 w-full max-w-4xl'},
       React.createElement('div', {className:'font-semibold mb-2'}, cmd),
       React.createElement(ResponsiveContainer, {width:'100%', height:400},
-        React.createElement(LineChart, {data: displaySeriesByCommand[cmd]},
+        React.createElement(LineChart, {data: seriesByCommand[cmd]},
           React.createElement(CartesianGrid, {strokeDasharray:'3 3'}),
           React.createElement(XAxis, {
             dataKey:'sha',
