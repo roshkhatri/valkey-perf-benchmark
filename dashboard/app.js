@@ -295,9 +295,14 @@ function labelSel(label, val, setter, opts){
 }
 
 function labelDate(label, val, setter, brushVal){
+  const displayVal = brushVal || val || '';
   return React.createElement('label', {className:'font-medium inline-flex items-center'}, `${label}:`,
-    React.createElement('input', {type:'date', className:'border rounded p-1 ml-2', value:val, onChange:e=>setter(e.target.value)}),
-    brushVal ? React.createElement('span', {className:'ml-2 text-xs text-gray-600'}, brushVal) : null
+    React.createElement('input', {
+      type:'date',
+      className:'border rounded p-1 ml-2',
+      value: displayVal,
+      onChange:e=>setter(e.target.value)
+    })
   );
 }
 
