@@ -57,6 +57,9 @@ python benchmark.py --commits 1a2b3c4d
 # Use a pre-existing Valkey dir
 python benchmark.py --valkey-path /path/to/valkey
 
+# Use a pre-running Valkey Server
+python benchmark.py --valkey-path /path/to/valkey --use-running-server
+
 ### Comparison Mode
 
 # Compare with baseline
