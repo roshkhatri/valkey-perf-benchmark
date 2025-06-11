@@ -160,6 +160,12 @@ function Dashboard() {
     [commits, commitTimes, fromDate, toDate]
   );
 
+  // reset brush range whenever the user changes the date filters so the
+  // full range of the new selection is displayed
+  React.useEffect(() => {
+    setBrushRange(null);
+  }, [fromDate, toDate]);
+
   React.useEffect(() => {
     if (!filteredCommits.length) {
       setBrushRange(null);
