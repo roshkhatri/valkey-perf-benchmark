@@ -127,7 +127,8 @@ workflow which uploads the files to an Amazon S3 bucket configured for static
 website hosting. Metrics files (`completed_commits.json` and the `results/`
 folder) are stored in the same bucket so the dashboard can fetch them directly.
 `completed_commits.json` now stores objects containing the commit SHA, the
-original commit timestamp, and the benchmark status:
+original commit timestamp, and the benchmark status. The dashboard ignores
+entries with the status `in_progress`:
 
 ```json
 [ { "sha": "abcdef123", "timestamp": "2024-01-02T15:04:05Z", "status": "complete" } ]
