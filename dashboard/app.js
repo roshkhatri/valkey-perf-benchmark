@@ -161,14 +161,17 @@ function Dashboard() {
   );
 
   React.useEffect(() => {
-    if (!filteredCommits.length) return;
+    if (!filteredCommits.length) {
+      setBrushRange(null);
+      return;
+    }
     setBrushRange(range => {
       if (!range) return { startIndex: 0, endIndex: filteredCommits.length - 1 };
       const start = Math.max(0, Math.min(range.startIndex, filteredCommits.length - 1));
       const end = Math.max(start, Math.min(range.endIndex, filteredCommits.length - 1));
       return { startIndex: start, endIndex: end };
     });
-  }, [filteredCommits.length]);
+  }, [filteredCommits]);
 
   // when command list changes keep existing selections but avoid
   // re-enabling commands the user unchecked
@@ -248,7 +251,7 @@ function Dashboard() {
           }),
           React.createElement(YAxis),
           React.createElement(Tooltip),
-          React.createElement(Brush, {
+          (filteredCommits.length > 0) && React.createElement(Brush, {
             dataKey:'timestamp',
             startIndex: brushRange ? brushRange.startIndex : 0,
             endIndex: brushRange ? brushRange.endIndex : (filteredCommits.length - 1),
