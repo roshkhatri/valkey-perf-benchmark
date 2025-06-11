@@ -152,7 +152,7 @@ function Dashboard() {
   const filteredCommits = React.useMemo(() =>
     commits.filter(sha => {
       const ts = commitTimes[sha];
-      if (!ts) return true;
+      if (!ts) return false;
       if (fromDate && new Date(ts) < new Date(fromDate)) return false;
       if (toDate && new Date(ts) > new Date(toDate)) return false;
       return true;
