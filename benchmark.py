@@ -123,7 +123,9 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args: argparse.Namespace)
     logging.getLogger().setLevel(args.log_level)
 
     builder = ServerBuilder(
-        commit_id=commit_id, tls_mode=cfg.tls_mode, valkey_path=args.valkey_path
+        commit_id=commit_id,
+        tls_mode=cfg["tls_mode"],
+        valkey_path=args.valkey_path,
     )
     if not args.use_running_server:
         builder.build()
@@ -132,8 +134,8 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args: argparse.Namespace)
 
     Logger.info(
         f"Commit {commit_id[:10]} | "
-        f"TLS={'on' if cfg.tls_mode == 'yes' else 'off'} | "
-        f"Cluster={'on' if cfg.cluster_mode == 'yes' else 'off'}"
+        f"TLS={'on' if cfg['tls_mode'] == 'yes' else 'off'} | "
+        f"Cluster={'on' if cfg['cluster_mode'] == 'yes' else 'off'}"
     )
     # ---- server side -----------------
     if (not args.use_running_server) and args.mode in ("server", "both"):
@@ -141,16 +143,16 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args: argparse.Namespace)
             commit_id=commit_id, valkey_path=args.valkey_path
         )
         launcher.launch_all_servers(
-            cluster_mode=cfg.cluster_mode,
-            tls_mode=cfg.tls_mode,
+            cluster_mode=cfg["cluster_mode"],
+            tls_mode=cfg["tls_mode"],
         )
 
     if args.mode in ("client", "both"):
         runner = ClientRunner(
             commit_id=commit_id,
             config=cfg,
-            cluster_mode=cfg.cluster_mode,
-            tls_mode=cfg.tls_mode,
+            cluster_mode=cfg["cluster_mode"],
+            tls_mode=cfg["tls_mode"],
             target_ip=args.target_ip,
             results_dir=results_dir,
             valkey_path=args.valkey_path,
@@ -158,7 +160,8 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args: argparse.Namespace)
         runner.ping_server()
         runner.run_benchmark_config()
 
-        # ---- clean up --------------------------------------------------
+        if not args.use_running_server:
+            runner.cleanup_terminate()
 
 # ---------- Entry point ------------------------------------------------------
 def main() -> None:

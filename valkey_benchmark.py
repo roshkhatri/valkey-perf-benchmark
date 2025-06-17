@@ -38,6 +38,17 @@ class ClientRunner:
         self.valkey_path = valkey_path
         self.valkey_cli = f"{valkey_path}/{VALKEY_CLI}"
         self.valkey_benchmark = f"{valkey_path}/{VALKEY_BENCHMARK}"
+    
+    def _run(self, cmd: Iterable[str]) -> None:
+        """Execute a command and log failures."""
+
+        try:
+            Logger.info(f"Running: {' '.join(cmd)}")
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            Logger.error(f"Command failed with error: {e}")
+        except Exception as e:
+            Logger.error(f"An error occurred: {e}")
 
     def ping_server(self) -> None:
         """Verify the target server is reachable."""
@@ -245,15 +256,12 @@ class ClientRunner:
                 "./tests/tls/ca.crt",
             ]
         return cmd
-
-    def _run(self, cmd: Iterable[str]) -> None:
-        """Execute a command and log failures."""
-
-        try:
-            Logger.info(f"Running: {' '.join(cmd)}")
-            subprocess.run(cmd, check=True)
-        except subprocess.CalledProcessError as e:
-            Logger.error(f"Command failed with error: {e}")
-        except Exception as e:
-            Logger.error(f"An error occurred: {e}")
-
+    
+    def cleanup_terminate(self) -> None:
+        """Cleanup any resources or processes."""
+        Logger.info("Cleaning up resources...")
+        cleanup_cmd = self._build_cli_command(self.tls_mode) + ["FLUSHALL", "SYNC"]
+        self._run(cleanup_cmd)
+        terminiate_cmd = ["pkill", "-f", "valkey-server"]
+        self._run(terminiate_cmd)
+        pass

@@ -30,7 +30,6 @@ valkey-perf-benchmark/
 ├── valkey_server.py          # Manages Valkey server instances
 ├── valkey_benchmark.py       # Runs benchmark tests
 ├── process_metrics.py        # Processes and formats benchmark results
-├── cleanup_server.py         # Utilities for cleaning up server processes
 └── logger.py                 # Logging utilities
 ```
 
