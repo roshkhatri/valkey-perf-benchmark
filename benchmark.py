@@ -21,8 +21,8 @@ REQUIRED_KEYS = [
     "pipelines",
     "clients",
     "commands",
-    "cluster_modes",
-    "tls_modes",
+    "cluster_mode",
+    "tls_mode",
     "warmup",
 ]
 
@@ -116,52 +116,49 @@ def ensure_results_dir(root: Path, commit_id: str) -> Path:
     return d
 
 
-def run_benchmark_matrix(*, commit_id: str, cfg: dict, args) -> None:
+def run_benchmark_matrix(*, commit_id: str, cfg: dict, args: argparse.Namespace) -> None:
     """Run benchmarks for all tls and cluster mode combinations."""
     results_dir = ensure_results_dir(args.results_dir, commit_id)
     Logger.init_logging(results_dir / "logs.txt")
     logging.getLogger().setLevel(args.log_level)
 
-    for tls_mode in cfg["tls_modes"]:
-        builder = ServerBuilder(
-            commit_id=commit_id, tls_mode=tls_mode, valkey_path=args.valkey_path
+    builder = ServerBuilder(
+        commit_id=commit_id, tls_mode=cfg.tls_mode, valkey_path=args.valkey_path
+    )
+    if not args.use_running_server:
+        builder.build()
+    else:
+        Logger.info("Using pre-built Valkey instance.")
+
+    Logger.info(
+        f"Commit {commit_id[:10]} | "
+        f"TLS={'on' if cfg.tls_mode == 'yes' else 'off'} | "
+        f"Cluster={'on' if cfg.cluster_mode == 'yes' else 'off'}"
+    )
+    # ---- server side -----------------
+    if (not args.use_running_server) and args.mode in ("server", "both"):
+        launcher = ServerLauncher(
+            commit_id=commit_id, valkey_path=args.valkey_path
         )
-        if not args.use_running_server:
-            builder.build()
-        else:
-            Logger.info("Using pre-built Valkey instance.")
+        launcher.launch_all_servers(
+            cluster_mode=cfg.cluster_mode,
+            tls_mode=cfg.tls_mode,
+        )
 
-        for cluster_mode in cfg["cluster_modes"]:
-            Logger.info(
-                f"Commit {commit_id[:10]} | "
-                f"TLS={'on' if tls_mode == 'yes' else 'off'} | "
-                f"Cluster={'on' if cluster_mode == 'yes' else 'off'}"
-            )
-            # ---- server side -----------------
-            if (not args.use_running_server) and args.mode in ("server", "both"):
-                launcher = ServerLauncher(
-                    commit_id=commit_id, valkey_path=args.valkey_path
-                )
-                launcher.launch_all_servers(
-                    cluster_mode=cluster_mode,
-                    tls_mode=tls_mode,
-                )
+    if args.mode in ("client", "both"):
+        runner = ClientRunner(
+            commit_id=commit_id,
+            config=cfg,
+            cluster_mode=cfg.cluster_mode,
+            tls_mode=cfg.tls_mode,
+            target_ip=args.target_ip,
+            results_dir=results_dir,
+            valkey_path=args.valkey_path,
+        )
+        runner.ping_server()
+        runner.run_benchmark_config()
 
-            if args.mode in ("client", "both"):
-                runner = ClientRunner(
-                    commit_id=commit_id,
-                    config=cfg,
-                    cluster_mode=cluster_mode,
-                    tls_mode=tls_mode,
-                    target_ip=args.target_ip,
-                    results_dir=results_dir,
-                    valkey_path=args.valkey_path,
-                )
-                runner.ping_server()
-                runner.run_benchmark_config()
-
-                # ---- clean up --------------------------------------------------
-
+        # ---- clean up --------------------------------------------------
 
 # ---------- Entry point ------------------------------------------------------
 def main() -> None:

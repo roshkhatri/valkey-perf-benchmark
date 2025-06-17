@@ -91,8 +91,8 @@ Create benchmark configurations in JSON format. Example:
     "data_sizes": [16, 64, 256],
     "pipelines": [1, 10, 100],
     "commands": ["SET", "GET"],
-    "cluster_modes": ["no"],
-    "tls_modes": ["no"],
+    "cluster_mode": "no",
+    "tls_mode": "no",
     "warmup": [10]
   }
 ]
@@ -105,8 +105,8 @@ Create benchmark configurations in JSON format. Example:
 - `data_sizes`: Size of data in bytes
 - `pipelines`: Number of commands to pipeline
 - `commands`: Redis commands to benchmark
-- `cluster_modes`: Whether to enable cluster mode ("yes" or "no")
-- `tls_modes`: Whether to enable TLS ("yes" or "no")
+- `cluster_mode`: Whether to enable cluster mode ("yes" or "no")
+- `tls_mode`: Whether to enable TLS ("yes" or "no")
 - `warmup`: Warmup time in seconds before benchmarking
 
 ## Results

@@ -6,8 +6,8 @@
       "pipelines": [10],
       "clients": [50],
       "commands": ["SET", "GET", "RPUSH", "LPUSH", "LPOP", "SADD", "SPOP", "HSET"],
-      "cluster_modes": ["no"],
-      "tls_modes": ["no"],
+      "cluster_mode": "no",
+      "tls_mode": "no",
       "warmup": [10],
       "deployment": "single"
     }
