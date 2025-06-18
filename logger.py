@@ -68,6 +68,6 @@ class Logger:
         def write(self, message: str) -> None:
             if message.strip():
                 self.logger.log(self.level, message.strip())
+
         def flush(self) -> None:
             pass
-

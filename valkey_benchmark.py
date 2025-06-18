@@ -38,7 +38,7 @@ class ClientRunner:
         self.valkey_path = valkey_path
         self.valkey_cli = f"{valkey_path}/{VALKEY_CLI}"
         self.valkey_benchmark = f"{valkey_path}/{VALKEY_BENCHMARK}"
-    
+
     def _run(self, cmd: Iterable[str]) -> None:
         """Execute a command and log failures."""
 
@@ -256,7 +256,7 @@ class ClientRunner:
                 "./tests/tls/ca.crt",
             ]
         return cmd
-    
+
     def cleanup_terminate(self) -> None:
         """Cleanup any resources or processes."""
         Logger.info("Cleaning up resources...")
@@ -264,4 +264,3 @@ class ClientRunner:
         self._run(cleanup_cmd)
         terminiate_cmd = ["pkill", "-f", "valkey-server"]
         self._run(terminiate_cmd)
-        pass
