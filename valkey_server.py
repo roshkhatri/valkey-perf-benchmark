@@ -119,4 +119,3 @@ class ServerLauncher:
         time.sleep(2)
         self._run(add_slots_cmd)
         time.sleep(2)
-

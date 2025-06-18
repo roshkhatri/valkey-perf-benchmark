@@ -23,7 +23,9 @@ class MetricsProcessor:
         ISO8601 commit timestamp.
     """
 
-    def __init__(self, commit_id: str, cluster_mode: bool, tls_mode: bool, commit_time: str) -> None:
+    def __init__(
+        self, commit_id: str, cluster_mode: bool, tls_mode: bool, commit_time: str
+    ) -> None:
         self.commit_id = commit_id
         self.cluster_mode = cluster_mode
         self.tls_mode = tls_mode
@@ -64,7 +66,9 @@ class MetricsProcessor:
             "tls": self.tls_mode,
         }
 
-    def write_metrics(self, results_dir: Path, new_metrics: List[Dict[str, object]]) -> None:
+    def write_metrics(
+        self, results_dir: Path, new_metrics: List[Dict[str, object]]
+    ) -> None:
         """Append metrics to ``results_dir/metrics.json``."""
         metrics_file = results_dir / "metrics.json"
         metrics = []
@@ -85,4 +89,3 @@ class MetricsProcessor:
             json.dump(metrics, f, indent=4)
 
         Logger.info(f"Metrics written to {metrics_file}")
-

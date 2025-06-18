@@ -116,7 +116,9 @@ def ensure_results_dir(root: Path, commit_id: str) -> Path:
     return d
 
 
-def run_benchmark_matrix(*, commit_id: str, cfg: dict, args: argparse.Namespace) -> None:
+def run_benchmark_matrix(
+    *, commit_id: str, cfg: dict, args: argparse.Namespace
+) -> None:
     """Run benchmarks for all tls and cluster mode combinations."""
     results_dir = ensure_results_dir(args.results_dir, commit_id)
     Logger.init_logging(results_dir / "logs.txt")
@@ -139,9 +141,7 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args: argparse.Namespace)
     )
     # ---- server side -----------------
     if (not args.use_running_server) and args.mode in ("server", "both"):
-        launcher = ServerLauncher(
-            commit_id=commit_id, valkey_path=args.valkey_path
-        )
+        launcher = ServerLauncher(commit_id=commit_id, valkey_path=args.valkey_path)
         launcher.launch_all_servers(
             cluster_mode=cfg["cluster_mode"],
             tls_mode=cfg["tls_mode"],
@@ -163,6 +163,7 @@ def run_benchmark_matrix(*, commit_id: str, cfg: dict, args: argparse.Namespace)
         if not args.use_running_server:
             runner.cleanup_terminate()
 
+
 # ---------- Entry point ------------------------------------------------------
 def main() -> None:
     """Entry point for the benchmark CLI."""
@@ -173,7 +174,6 @@ def main() -> None:
             "ERROR: --use-running-server implies the valkey is already build and running, "
             "so --mode must be 'client'."
         )
-    print(args)
 
     commits = args.commits.copy()
     if args.baseline and args.baseline not in commits:
@@ -184,6 +184,6 @@ def main() -> None:
         for commit in commits:
             run_benchmark_matrix(commit_id=commit, cfg=cfg, args=args)
 
+
 if __name__ == "__main__":
     main()
-
