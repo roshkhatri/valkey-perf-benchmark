@@ -19,6 +19,8 @@ class ServerLauncher:
     ) -> None:
         self.commit_id = commit_id
         self.valkey_path = valkey_path
+        self.valkey_cli = f"{valkey_path}/{VALKEY_CLI}"
+        self.valkey_server = f"{valkey_path}/{VALKEY_SERVER}"
         self.cores = cores
 
     def launch_all_servers(self, cluster_mode: str, tls_mode: str) -> None:
@@ -44,7 +46,7 @@ class ServerLauncher:
         base = []
         if self.cores:
             base += ["taskset", "-c", self.cores]
-        base.append(f"{self.valkey_path}/{VALKEY_SERVER}")
+        base.append(self.valkey_server)
 
         if tls_mode == "yes":
             cmd = base + [
@@ -53,11 +55,11 @@ class ServerLauncher:
                 "--port",
                 "0",
                 "--tls-cert-file",
-                "./tests/tls/valkey.crt",
+                f"{self.valkey_path}/tests/tls/valkey.crt",
                 "--tls-key-file",
-                "./tests/tls/valkey.key",
+                f"{self.valkey_path}/tests/tls/valkey.key",
                 "--tls-ca-cert-file",
-                "./tests/tls/ca.crt",
+                f"{self.valkey_path}/tests/tls/ca.crt",
                 "--daemonize",
                 "yes",
                 "--maxmemory-policy",
@@ -100,16 +102,16 @@ class ServerLauncher:
         Logger.info("Setting up cluster configuration...")
         time.sleep(2)
 
-        base_cmd = [VALKEY_CLI]
+        base_cmd = [self.valkey_cli]
         if tls_mode == "yes":
             base_cmd += [
                 "--tls",
                 "--cert",
-                "./tests/tls/valkey.crt",
+                f"{self.valkey_path}/tests/tls/valkey.crt",
                 "--key",
-                "./tests/tls/valkey.key",
+                f"{self.valkey_path}/tests/tls/valkey.key",
                 "--cacert",
-                "./tests/tls/ca.crt",
+                f"{self.valkey_path}/tests/tls/ca.crt",
             ]
 
         reset_cmd = base_cmd + ["CLUSTER", "RESET", "HARD"]

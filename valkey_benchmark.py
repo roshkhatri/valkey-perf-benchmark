@@ -55,7 +55,18 @@ class ClientRunner:
     def ping_server(self) -> None:
         """Verify the target server is reachable."""
         try:
-            cmd = [self.valkey_cli, "-h", self.target_ip, "-p", "6379", "ping"]
+            cmd = [self.valkey_cli]
+            if self.tls_mode:
+                cmd += [
+                    "--tls",
+                    "--cert",
+                    f"{self.valkey_path}/tests/tls/valkey.crt",
+                    "--key",
+                    f"{self.valkey_path}/tests/tls/valkey.key",
+                    "--cacert",
+                    f"{self.valkey_path}/tests/tls/ca.crt",
+                ]
+            cmd += ["-h", self.target_ip, "-p", "6379", "ping"]
             Logger.info(f"Running: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
             if "PONG" in result.stdout:
@@ -204,11 +215,11 @@ class ClientRunner:
             cmd += [
                 "--tls",
                 "--cert",
-                "./tests/tls/valkey.crt",
+                f"{self.valkey_path}/tests/tls/valkey.crt",
                 "--key",
-                "./tests/tls/valkey.key",
+                f"{self.valkey_path}/tests/tls/valkey.key",
                 "--cacert",
-                "./tests/tls/ca.crt",
+                f"{self.valkey_path}/tests/tls/ca.crt",
             ]
         return cmd
 
@@ -227,8 +238,18 @@ class ClientRunner:
         cmd: List[str] = []
         if self.cores:
             cmd += ["taskset", "-c", self.cores]
+        cmd.append(self.valkey_benchmark)
+        if tls:
+            cmd += [
+                "--tls",
+                "--cert",
+                f"{self.valkey_path}/tests/tls/valkey.crt",
+                "--key",
+                f"{self.valkey_path}/tests/tls/valkey.key",
+                "--cacert",
+                f"{self.valkey_path}/tests/tls/ca.crt",
+            ]
         cmd += [
-            self.valkey_benchmark,
             "-h",
             self.target_ip,
             "-p",
@@ -249,17 +270,6 @@ class ClientRunner:
             str(seed_val),
             "--csv",
         ]
-
-        if tls:
-            cmd += [
-                "--tls",
-                "--cert",
-                "./tests/tls/valkey.crt",
-                "--key",
-                "./tests/tls/valkey.key",
-                "--cacert",
-                "./tests/tls/ca.crt",
-            ]
         return cmd
 
     def cleanup_terminate(self) -> None:

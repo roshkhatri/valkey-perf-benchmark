@@ -6,7 +6,7 @@ A comprehensive benchmarking tool for [Valkey](https://github.com/valkey-io/valk
 
 - Benchmark Valkey server with various commands (SET, GET, RPUSH, etc.)
 - Test with different data sizes and pipeline configurations
-- Support for TLS and cluster mode testing [WIP only for non TLS and non cluster mode]
+- Support for TLS and cluster mode testing
 - Automatic server setup and teardown
 - Detailed performance metrics collection and reporting
 - Compare performance between different Valkey versions/commits
@@ -93,8 +93,8 @@ Create benchmark configurations in JSON format. Example:
     "data_sizes": [16, 64, 256],
     "pipelines": [1, 10, 100],
     "commands": ["SET", "GET"],
-    "cluster_mode": "no",
-    "tls_mode": "no",
+    "cluster_mode": "yes",
+    "tls_mode": "yes",
     "warmup": [10]
   }
 ]
