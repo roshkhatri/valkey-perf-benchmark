@@ -10,6 +10,7 @@ A comprehensive benchmarking tool for [Valkey](https://github.com/valkey-io/valk
 - Automatic server setup and teardown
 - Detailed performance metrics collection and reporting
 - Compare performance between different Valkey versions/commits
+- Optional CPU pinning via `taskset` (separate ranges for server and benchmark)
 
 ## Prerequisites
 
@@ -76,6 +77,8 @@ python benchmark.py --results-dir ./my-results
 
 # Set logging level
 python benchmark.py --log-level DEBUG
+# Pin server and benchmark to separate CPU cores
+python benchmark.py --cpu-range 0-1,2-3
 ```
 
 ## Configuration

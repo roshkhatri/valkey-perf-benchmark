@@ -7,7 +7,7 @@ import subprocess
 import time
 from itertools import product
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 from process_metrics import MetricsProcessor
 from logger import Logger
@@ -28,6 +28,7 @@ class ClientRunner:
         target_ip: str,
         results_dir: Path,
         valkey_path: str,
+        cores: Optional[str] = None,
     ) -> None:
         self.commit_id = commit_id
         self.config = config
@@ -38,6 +39,7 @@ class ClientRunner:
         self.valkey_path = valkey_path
         self.valkey_cli = f"{valkey_path}/{VALKEY_CLI}"
         self.valkey_benchmark = f"{valkey_path}/{VALKEY_BENCHMARK}"
+        self.cores = cores
 
     def _run(self, cmd: Iterable[str]) -> None:
         """Execute a command and log failures."""
@@ -222,7 +224,10 @@ class ClientRunner:
         seed_val: int,
     ) -> List[str]:
         """Construct the ``valkey-benchmark`` command line."""
-        cmd = [
+        cmd: List[str] = []
+        if self.cores:
+            cmd += ["taskset", "-c", self.cores]
+        cmd += [
             self.valkey_benchmark,
             "-h",
             self.target_ip,

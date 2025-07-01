@@ -3,7 +3,7 @@
 import os
 import subprocess
 import time
-from typing import Iterable
+from typing import Iterable, Optional
 
 from logger import Logger
 
@@ -14,9 +14,12 @@ VALKEY_CLI = "src/valkey-cli"
 class ServerLauncher:
     """Manage Valkey server instances."""
 
-    def __init__(self, commit_id: str, valkey_path: str = "../valkey") -> None:
+    def __init__(
+        self, commit_id: str, valkey_path: str = "../valkey", cores: Optional[str] = None
+    ) -> None:
         self.commit_id = commit_id
         self.valkey_path = valkey_path
+        self.cores = cores
 
     def launch_all_servers(self, cluster_mode: str, tls_mode: str) -> None:
         """Start a server and optionally configure cluster mode."""
@@ -38,12 +41,13 @@ class ServerLauncher:
         """Start a Valkey server instance."""
         log_file = f"results/{self.commit_id}/valkey_log_cluster_{'enabled' if (cluster_mode == 'yes') else 'disabled'}.log"
 
+        base = []
+        if self.cores:
+            base += ["taskset", "-c", self.cores]
+        base.append(f"{self.valkey_path}/{VALKEY_SERVER}")
+
         if tls_mode == "yes":
-            cmd = [
-                "taskset",
-                "-c",
-                "0-1",
-                f"{self.valkey_path}/{VALKEY_SERVER}",
+            cmd = base + [
                 "--tls-port",
                 "6379",
                 "--port",
@@ -68,11 +72,7 @@ class ServerLauncher:
                 "''",
             ]
         else:
-            cmd = [
-                "taskset",
-                "-c",
-                "0-1",
-                f"{self.valkey_path}/{VALKEY_SERVER}",
+            cmd = base + [
                 "--port",
                 "6379",
                 "--daemonize",

@@ -85,6 +85,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"]
     )
+    parser.add_argument(
+        "--cpu-range",
+        help=(
+            "Comma-separated CPU ranges for server and benchmark, e.g. "
+            "'0-1,2-3'. If omitted, processes are not pinned."
+        ),
+    )
 
     args, unknown = parser.parse_known_args()
     if unknown:
@@ -116,6 +123,14 @@ def ensure_results_dir(root: Path, commit_id: str) -> Path:
     return d
 
 
+def parse_core_range(range_str: str) -> List[int]:
+    """Return a list of CPU cores from a range string like '0-3'."""
+    if "-" in range_str:
+        start, end = range_str.split("-", 1)
+        return list(range(int(start), int(end) + 1))
+    return [int(c) for c in range_str.split(",") if c]
+
+
 def run_benchmark_matrix(
     *, commit_id: str, cfg: dict, args: argparse.Namespace
 ) -> None:
@@ -123,6 +138,20 @@ def run_benchmark_matrix(
     results_dir = ensure_results_dir(args.results_dir, commit_id)
     Logger.init_logging(results_dir / "logs.txt")
     logging.getLogger().setLevel(args.log_level)
+
+    server_core_range = None
+    bench_core_range = None
+    if args.cpu_range:
+        try:
+            server_str, bench_str = [s.strip() for s in args.cpu_range.split(',')]
+        except ValueError:
+            raise ValueError(
+                "--cpu-range must be two comma-separated ranges, e.g. '0-1,2-3'"
+            )
+        parse_core_range(server_str)
+        parse_core_range(bench_str)
+        server_core_range = server_str
+        bench_core_range = bench_str
 
     builder = ServerBuilder(
         commit_id=commit_id,
@@ -141,7 +170,11 @@ def run_benchmark_matrix(
     )
     # ---- server side -----------------
     if (not args.use_running_server) and args.mode in ("server", "both"):
-        launcher = ServerLauncher(commit_id=commit_id, valkey_path=args.valkey_path)
+        launcher = ServerLauncher(
+            commit_id=commit_id,
+            valkey_path=args.valkey_path,
+            cores=server_core_range,
+        )
         launcher.launch_all_servers(
             cluster_mode=cfg["cluster_mode"],
             tls_mode=cfg["tls_mode"],
@@ -156,6 +189,7 @@ def run_benchmark_matrix(
             target_ip=args.target_ip,
             results_dir=results_dir,
             valkey_path=args.valkey_path,
+            cores=bench_core_range,
         )
         runner.ping_server()
         runner.run_benchmark_config()
