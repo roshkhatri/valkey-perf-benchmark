@@ -36,22 +36,45 @@ def group_by_command(data):
     return result
 
 
-def summarize(data_item):
-    """Summarize a single benchmark result item."""
+def group_by_modes(data):
+    """Group benchmark results by command, cluster and TLS modes."""
+    result = {}
+    for item in data:
+        command = item.get("command", "UNKNOWN")
+        cluster = item.get("cluster_mode", False)
+        tls = item.get("tls", False)
+        key = (command, cluster, tls)
+        if key not in result:
+            result[key] = []
+        result[key].append(item)
+    return result
+
+
+def summarize(data_items):
+    """Summarize one or more benchmark result items."""
+    if not isinstance(data_items, list):
+        data_items = [data_items]
+
+    rps = _mean([item.get("rps", 0.0) for item in data_items])
+    latency_avg = _mean(
+        [item.get("avg_latency_ms", item.get("latency_avg_ms", 0.0)) for item in data_items]
+    )
+    latency_p50 = _mean(
+        [item.get("p50_latency_ms", item.get("latency_p50_ms", 0.0)) for item in data_items]
+    )
+    latency_p95 = _mean(
+        [item.get("p95_latency_ms", item.get("latency_p95_ms", 0.0)) for item in data_items]
+    )
+    latency_p99 = _mean(
+        [item.get("p99_latency_ms", item.get("latency_p99_ms", 0.0)) for item in data_items]
+    )
+
     return {
-        "rps": data_item.get("rps", 0.0),
-        "latency_avg_ms": data_item.get(
-            "avg_latency_ms", data_item.get("latency_avg_ms", 0.0)
-        ),
-        "latency_p50_ms": data_item.get(
-            "p50_latency_ms", data_item.get("latency_p50_ms", 0.0)
-        ),
-        "latency_p95_ms": data_item.get(
-            "p95_latency_ms", data_item.get("latency_p95_ms", 0.0)
-        ),
-        "latency_p99_ms": data_item.get(
-            "p99_latency_ms", data_item.get("latency_p99_ms", 0.0)
-        ),
+        "rps": rps,
+        "latency_avg_ms": latency_avg,
+        "latency_p50_ms": latency_p50,
+        "latency_p95_ms": latency_p95,
+        "latency_p99_ms": latency_p99,
     }
 
 
@@ -66,6 +89,8 @@ new_data = load(new_file)
 # Group by command
 baseline_by_command = group_by_command(baseline_data)
 new_by_command = group_by_command(new_data)
+baseline_by_modes = group_by_modes(baseline_data)
+new_by_modes = group_by_modes(new_data)
 
 # Get all unique commands
 all_commands = sorted(
@@ -92,13 +117,8 @@ for command in all_commands:
     baseline_items = baseline_by_command.get(command, [])
     new_items = new_by_command.get(command, [])
 
-    # If we have multiple items for the same command, use the first one
-    baseline_item = baseline_items[0] if baseline_items else {}
-    new_item = new_items[0] if new_items else {}
-
-    # Summarize
-    baseline_summary = summarize(baseline_item)
-    new_summary = summarize(new_item)
+    baseline_summary = summarize(baseline_items)
+    new_summary = summarize(new_items)
 
     # Generate metrics rows
     for metric in metrics:
@@ -113,6 +133,34 @@ for command in all_commands:
         )
 
     lines.append("")  # Add empty line between command sections
+
+# ---- Cluster/TLS combinations ----------------------------------------------
+lines.append("# Benchmark Comparison by Command, Cluster and TLS\n")
+all_keys = sorted(set(baseline_by_modes.keys()) | set(new_by_modes.keys()))
+for (command, cluster, tls) in all_keys:
+    lines.append(
+        f"## {command} | cluster {'enabled' if cluster else 'off'} | tls {'enabled' if tls else 'off'}\n"
+    )
+    lines.append("| Metric | Baseline | PR | Diff | % Change |")
+    lines.append("| --- | --- | --- | --- | --- |")
+
+    baseline_items = baseline_by_modes.get((command, cluster, tls), [])
+    new_items = new_by_modes.get((command, cluster, tls), [])
+
+    baseline_summary = summarize(baseline_items)
+    new_summary = summarize(new_items)
+
+    for metric in metrics:
+        baseline_value = baseline_summary.get(metric, 0.0)
+        new_value = new_summary.get(metric, 0.0)
+        diff = new_value - baseline_value
+        change = pct_change(new_value, baseline_value)
+
+        lines.append(
+            f"| {metric} | {baseline_value:.2f} | {new_value:.2f} | {diff:.2f} | {change:+.2f}% |"
+        )
+
+    lines.append("")
 
 # Join all lines
 table = "\n".join(lines)
