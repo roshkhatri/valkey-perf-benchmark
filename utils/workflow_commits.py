@@ -79,6 +79,7 @@ def mark_commits(
                 break
         if not found:
             commits.append({"sha": sha, "timestamp": ts, "status": status})
+        print(f"Marked {sha} as {status} with timestamp {ts}")
     save_commits(completed_file, commits)
 
 

@@ -33,9 +33,11 @@ class ServerBuilder:
             logging.exception(f"Unexpected error while running: {cmd_str}")
 
     def clone_and_checkout(self) -> None:
-        if not self.valkey_dir.exists():
-            logging.info(f"Cloning Valkey repo into {self.valkey_dir}...")
-            self._run(["git", "clone", self.repo_url, str(self.valkey_dir)])
+        if self.valkey_dir.exists():
+            logging.info(f"Removing existing {self.valkey_dir} for a clean build...")
+            shutil.rmtree(self.valkey_dir)
+        logging.info(f"Cloning Valkey repo into {self.valkey_dir}...")
+        self._run(["git", "clone", self.repo_url, str(self.valkey_dir)])
 
         if self.commit_id == "HEAD":
             return
@@ -53,3 +55,9 @@ class ServerBuilder:
             self._run(["./utils/gen-test-certs.sh"], cwd=self.valkey_dir)
         else:
             self._run(["make", "-j"], cwd=self.valkey_dir)
+
+    def cleanup(self) -> None:
+        """Remove the cloned Valkey directory."""
+        if self.valkey_dir.exists():
+            logging.info(f"Removing Valkey directory {self.valkey_dir}")
+            shutil.rmtree(self.valkey_dir)
