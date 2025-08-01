@@ -305,7 +305,7 @@ class ClientRunner:
             cmd += ["--tls"]
             cmd += ["--cert", "./tests/tls/valkey.crt"]
             cmd += ["--key", "./tests/tls/valkey.key"]
-            cmd += ["--cacert", "/tests/tls/ca.crt"]
+            cmd += ["--cacert", "./tests/tls/ca.crt"]
         cmd += ["-h", self.target_ip]
         cmd += ["-p", "6379"]
         cmd += ["-n", str(requests)]
