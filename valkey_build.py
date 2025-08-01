@@ -1,12 +1,11 @@
 """Build Valkey from source for benchmarking."""
 
-import os
+import logging
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Iterable, Optional
-
-import logging
 
 
 class ServerBuilder:
@@ -56,8 +55,11 @@ class ServerBuilder:
         else:
             self._run(["make", "-j"], cwd=self.valkey_dir)
 
-    def cleanup(self) -> None:
-        """Remove the cloned Valkey directory."""
+    def cleanup_terminate(self) -> None:
+        """Terminate all valkey processes and delete the cloned Valkey directory."""
+        logging.info("Terminating any running Valkey server processes...")
+        self._run(["pkill", "-f", "valkey"])
+        time.sleep(2)
         if self.valkey_dir.exists():
             logging.info(f"Removing Valkey directory {self.valkey_dir}")
             shutil.rmtree(self.valkey_dir)

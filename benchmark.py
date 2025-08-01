@@ -12,6 +12,7 @@ import sys
 from valkey_build import ServerBuilder
 from valkey_server import ServerLauncher
 from valkey_benchmark import ClientRunner
+from utils.workflow_commits import mark_commits
 
 # ---------- Constants --------------------------------------------------------
 DEFAULT_RESULTS_ROOT = Path("results")
@@ -108,7 +109,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--completed-file",
         type=Path,
-        default="../valkey/completed_commits.json",
+        default="./completed_commits.json",
         help="Path to completed_commits.json used for tracking progress",
     )
 
@@ -199,7 +200,7 @@ def run_benchmark_matrix(
         parse_core_range(args.client_cpu_range)
         bench_core_range = args.client_cpu_range
 
-    valkey_dir_needs_cleanup = not args.valkey_path or not args.use_running_server
+    cleanup_required = not args.valkey_path or not args.use_running_server
 
     valkey_dir = (
         Path(args.valkey_path) if args.valkey_path else Path(f"../valkey_{commit_id}")
@@ -247,13 +248,8 @@ def run_benchmark_matrix(
         runner.wait_for_server_ready()
         runner.run_benchmark_config()
 
-        if not args.use_running_server:
-            runner.cleanup_terminate()
-
         # Mark commit as complete when done
         try:
-            from utils.workflow_commits import mark_commits
-
             mark_commits(
                 completed_file=Path(args.completed_file),
                 repo=valkey_dir,
@@ -263,8 +259,8 @@ def run_benchmark_matrix(
         except Exception as exc:
             logging.warning(f"Failed to update completed_commits.json: {exc}")
 
-        if valkey_dir_needs_cleanup:
-            builder.cleanup()
+        if cleanup_required:
+            builder.cleanup_terminate()
 
 
 # ---------- Entry point ------------------------------------------------------

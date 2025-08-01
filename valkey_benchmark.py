@@ -319,13 +319,3 @@ class ClientRunner:
         cmd += ["--seed", str(seed_val)]
         cmd += ["--csv"]
         return cmd
-
-    def cleanup_terminate(self) -> None:
-        logging.info("Cleaning up...")
-        client = self._create_client()
-        client.execute_command("FLUSHALL", "SYNC")
-        client.close()
-        self._run(["pkill", "-f", "valkey-server"])
-        # Delete any .rdb files if present
-        logging.info("Deleting any .rdb files...")
-        self._run(["find", "-name", "*.rdb", "-delete"])
