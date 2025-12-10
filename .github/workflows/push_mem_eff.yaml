@@ -1,0 +1,62 @@
+name: Push Memory Efficiency to PostgreSQL
+on:
+    push:
+    workflow_dispatch:
+        inputs:
+            csv_file:
+                description: "Path to CSV file"
+                required: false
+                default: "mem-eff.csv"
+                type: string
+            table_name:
+                description: "PostgreSQL table name"
+                required: false
+                default: "mem-efficiency-by-version"
+                type: string
+permissions:
+    id-token: write
+    contents: read
+defaults:
+    run:
+        shell: "bash -Eeuo pipefail -x {0}"
+jobs:
+    push_mem_efficiency:
+        runs-on: [self-hosted, ec2-al-2023-benchmarking-arm64]
+        timeout-minutes: 10
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                path: valkey-perf-benchmark
+            - name: Set up Python
+              uses: kishaningithub/setup-python-amazon-linux@63dc7bd642c6a564d0a93dd4b1cbe3e448ce3621
+              with:
+                  python-version: "3.10"
+                  cache: "pip"
+            - name: Install dependencies
+              working-directory: valkey-perf-benchmark
+              run: |
+                  sudo dnf groupinstall "Development Tools" -y
+                  sudo dnf install -y gcc gcc-c++ make python3-devel openssl-devel bzip2-devel libffi-devel
+                  pip install -r requirements.txt
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-region: ${{ secrets.AWS_REGION }}
+                  role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+            - name: Push data to PostgreSQL
+              run: |
+                  PGPASSWORD=$(aws rds generate-db-auth-token \
+                    --hostname ${{ secrets.POSTGRESQL_ENDPOINT }} \
+                    --port 5432 \
+                    --region ${{ secrets.AWS_REGION }} \
+                    --username ${{ secrets.RDS_USERNAME }})
+
+                  python utils/push_mem_eff_to_postgres.py \
+                    --csv-file "${{ inputs.csv_file || 'mem-eff.csv' }}" \
+                    --host ${{ secrets.POSTGRESQL_ENDPOINT }} \
+                    --port 5432 \
+                    --database ${{ secrets.RDS_DATABASE }} \
+                    --username ${{ secrets.RDS_USERNAME }} \
+                    --password "$PGPASSWORD" \
+                    --table-name ${{ inputs.table_name || 'mem-efficiency-by-version' }}

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Set
 
 import psycopg2
+from psycopg2 import sql
 from psycopg2.extras import execute_values
 
 
@@ -25,7 +26,7 @@ def read_csv_data(csv_file: Path):
         Tuple of (version headers, list of row dictionaries)
     """
     with open(csv_file, 'r') as f:
-        reader = csv.reader(f)
+        reader = csv.reader(f, delimiter=' ')
         headers = next(reader)
         
         # First column is 'size', rest are version numbers
@@ -35,7 +36,7 @@ def read_csv_data(csv_file: Path):
         for row in reader:
             row_dict = {'size': int(row[0])}
             for i, version in enumerate(version_columns, 1):
-                row_dict[f"v{version.replace('.', '_')}"] = float(row[i])
+                row_dict[version] = float(row[i])
             rows.append(row_dict)
     
     return version_columns, rows
@@ -83,27 +84,33 @@ def create_or_update_table(conn, table_name: str, version_columns: List[str]):
         table_exists = result[0] if result else False
         
         if not table_exists:
-            # Create new table
-            version_cols = [f"v{v.replace('.', '_')} DECIMAL(15,6)" for v in version_columns]
-            columns_def = ["size INTEGER PRIMARY KEY"] + version_cols + ["updated_at TIMESTAMPTZ DEFAULT NOW()"]
-            
-            create_sql = f"""
-                CREATE TABLE {table_name} (
-                    {', '.join(columns_def)}
+            # Create new table using SQL identifiers
+            column_defs = [sql.SQL("size INTEGER PRIMARY KEY")]
+            for v in version_columns:
+                column_defs.append(
+                    sql.SQL("{} DECIMAL(15,6)").format(sql.Identifier(v))
                 )
-            """
+            column_defs.append(sql.SQL("updated_at TIMESTAMPTZ DEFAULT NOW()"))
+            
+            create_sql = sql.SQL("CREATE TABLE {} ({})").format(
+                sql.Identifier(table_name),
+                sql.SQL(', ').join(column_defs)
+            )
             cur.execute(create_sql)
-            print(f"Created table '{table_name}' with columns: size, {', '.join([f'v{v.replace('.', '_')}' for v in version_columns])}")
+            version_col_names = ', '.join(version_columns)
+            print(f"Created table '{table_name}' with columns: size, {version_col_names}")
         else:
             # Check for missing version columns
             existing_columns = get_existing_columns(conn, table_name)
             
             for version in version_columns:
-                col_name = f"v{version.replace('.', '_')}"
-                if col_name not in existing_columns:
-                    alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {col_name} DECIMAL(15,6)"
+                if version not in existing_columns:
+                    alter_sql = sql.SQL("ALTER TABLE {} ADD COLUMN {} DECIMAL(15,6)").format(
+                        sql.Identifier(table_name),
+                        sql.Identifier(version)
+                    )
                     cur.execute(alter_sql)
-                    print(f"Added new column: {col_name}")
+                    print(f"Added new column: {version}")
     
     conn.commit()
 
@@ -132,31 +139,36 @@ def upsert_data(conn, table_name: str, rows: List[Dict[str, Any]], dry_run: bool
             print(f"  ... and {len(rows) - 3} more")
         return len(rows)
     
-    # Get all column names from first row (excluding 'size')
+    # Get all column names from first row
     all_columns = list(rows[0].keys())
     version_columns = [col for col in all_columns if col != 'size']
     
-    # Build UPSERT statement
-    columns_str = ', '.join(all_columns)
-    values_placeholders = ', '.join(['%s'] * len(all_columns))
+    # Build UPSERT statement using SQL identifiers
+    column_identifiers = [sql.Identifier(col) for col in all_columns]
+    columns_sql = sql.SQL(', ').join(column_identifiers)
     
     # Build UPDATE clause for conflict resolution
-    update_assignments = ', '.join([f"{col} = EXCLUDED.{col}" for col in version_columns])
-    update_assignments += ", updated_at = NOW()"
+    update_parts = [
+        sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
+        for col in version_columns
+    ]
+    update_parts.append(sql.SQL("updated_at = NOW()"))
+    update_sql = sql.SQL(', ').join(update_parts)
     
-    upsert_sql = f"""
-        INSERT INTO {table_name} ({columns_str}) 
-        VALUES %s
-        ON CONFLICT (size) 
-        DO UPDATE SET {update_assignments}
-    """
+    upsert_sql = sql.SQL(
+        "INSERT INTO {} ({}) VALUES %s ON CONFLICT (size) DO UPDATE SET {}"
+    ).format(
+        sql.Identifier(table_name),
+        columns_sql,
+        update_sql
+    )
     
     # Convert rows to tuples in correct column order
     row_tuples = [tuple(row[col] for col in all_columns) for row in rows]
     
     print(f"Upserting {len(row_tuples)} rows into {table_name}...")
     with conn.cursor() as cur:
-        execute_values(cur, upsert_sql, row_tuples)
+        execute_values(cur, upsert_sql.as_string(conn), row_tuples)
         affected_count = cur.rowcount
     
     conn.commit()
