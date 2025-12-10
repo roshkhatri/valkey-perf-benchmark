@@ -17,13 +17,13 @@ from psycopg2.extras import execute_values
 
 
 def read_csv_data(csv_file: Path):
-    """Read CSV file and return headers and data rows.
+    """Read CSV file and convert to tall/long format.
     
     Args:
         csv_file: Path to the CSV file
         
     Returns:
-        Tuple of (version headers, list of row dictionaries)
+        Tuple of (version headers, list of row dictionaries in tall format)
     """
     with open(csv_file, 'r') as f:
         reader = csv.reader(f, delimiter=' ')
@@ -34,10 +34,14 @@ def read_csv_data(csv_file: Path):
         
         rows = []
         for row in reader:
-            row_dict = {'size': int(row[0])}
+            size = int(row[0])
+            # Create one row per version (tall format)
             for i, version in enumerate(version_columns, 1):
-                row_dict[version] = float(row[i])
-            rows.append(row_dict)
+                rows.append({
+                    'size': size,
+                    'version': version,
+                    'value': float(row[i])
+                })
     
     return version_columns, rows
 
@@ -84,33 +88,28 @@ def create_or_update_table(conn, table_name: str, version_columns: List[str]):
         table_exists = result[0] if result else False
         
         if not table_exists:
-            # Create new table using SQL identifiers
-            column_defs = [sql.SQL("size INTEGER PRIMARY KEY")]
-            for v in version_columns:
-                column_defs.append(
-                    sql.SQL("{} DECIMAL(15,6)").format(sql.Identifier(v))
+            # Create new table in tall format
+            create_sql = sql.SQL("""
+                CREATE TABLE {} (
+                    size INTEGER NOT NULL,
+                    version VARCHAR(50) NOT NULL,
+                    value DECIMAL(15,6) NOT NULL,
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (size, version)
                 )
-            column_defs.append(sql.SQL("updated_at TIMESTAMPTZ DEFAULT NOW()"))
+            """).format(sql.Identifier(table_name))
             
-            create_sql = sql.SQL("CREATE TABLE {} ({})").format(
-                sql.Identifier(table_name),
-                sql.SQL(', ').join(column_defs)
-            )
             cur.execute(create_sql)
-            version_col_names = ', '.join(version_columns)
-            print(f"Created table '{table_name}' with columns: size, {version_col_names}")
-        else:
-            # Check for missing version columns
-            existing_columns = get_existing_columns(conn, table_name)
+            print(f"Created table '{table_name}' in tall format with columns: size, version, value, updated_at")
             
-            for version in version_columns:
-                if version not in existing_columns:
-                    alter_sql = sql.SQL("ALTER TABLE {} ADD COLUMN {} DECIMAL(15,6)").format(
-                        sql.Identifier(table_name),
-                        sql.Identifier(version)
-                    )
-                    cur.execute(alter_sql)
-                    print(f"Added new column: {version}")
+            # Create index for better query performance
+            index_sql = sql.SQL("CREATE INDEX {} ON {} (version, size)").format(
+                sql.Identifier(f"idx_{table_name}_version_size"),
+                sql.Identifier(table_name)
+            )
+            cur.execute(index_sql)
+        else:
+            print(f"Table '{table_name}' already exists")
     
     conn.commit()
 
@@ -139,32 +138,18 @@ def upsert_data(conn, table_name: str, rows: List[Dict[str, Any]], dry_run: bool
             print(f"  ... and {len(rows) - 3} more")
         return len(rows)
     
-    # Get all column names from first row
-    all_columns = list(rows[0].keys())
-    version_columns = [col for col in all_columns if col != 'size']
+    # Build UPSERT statement for tall format
+    upsert_sql = sql.SQL("""
+        INSERT INTO {} (size, version, value) 
+        VALUES %s 
+        ON CONFLICT (size, version) 
+        DO UPDATE SET 
+            value = EXCLUDED.value,
+            updated_at = NOW()
+    """).format(sql.Identifier(table_name))
     
-    # Build UPSERT statement using SQL identifiers
-    column_identifiers = [sql.Identifier(col) for col in all_columns]
-    columns_sql = sql.SQL(', ').join(column_identifiers)
-    
-    # Build UPDATE clause for conflict resolution
-    update_parts = [
-        sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(col), sql.Identifier(col))
-        for col in version_columns
-    ]
-    update_parts.append(sql.SQL("updated_at = NOW()"))
-    update_sql = sql.SQL(', ').join(update_parts)
-    
-    upsert_sql = sql.SQL(
-        "INSERT INTO {} ({}) VALUES %s ON CONFLICT (size) DO UPDATE SET {}"
-    ).format(
-        sql.Identifier(table_name),
-        columns_sql,
-        update_sql
-    )
-    
-    # Convert rows to tuples in correct column order
-    row_tuples = [tuple(row[col] for col in all_columns) for row in rows]
+    # Convert rows to tuples: (size, version, value)
+    row_tuples = [(row['size'], row['version'], row['value']) for row in rows]
     
     print(f"Upserting {len(row_tuples)} rows into {table_name}...")
     with conn.cursor() as cur:
@@ -217,7 +202,11 @@ def main():
     # Read CSV data
     print(f"Reading data from {csv_file}...")
     version_columns, rows = read_csv_data(csv_file)
-    print(f"Found {len(rows)} rows with versions: {', '.join(version_columns)}")
+    
+    # Get unique sizes for reporting
+    sizes = sorted(set(row['size'] for row in rows))
+    print(f"Found {len(sizes)} sizes and {len(version_columns)} versions: {', '.join(version_columns)}")
+    print(f"Total rows in tall format: {len(rows)}")
     
     if args.dry_run:
         print("\n[DRY RUN MODE]")

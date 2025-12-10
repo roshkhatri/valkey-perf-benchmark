@@ -45,6 +45,7 @@ jobs:
                   aws-region: ${{ secrets.AWS_REGION }}
                   role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
             - name: Push data to PostgreSQL
+              working-directory: valkey-perf-benchmark
               run: |
                   PGPASSWORD=$(aws rds generate-db-auth-token \
                     --hostname ${{ secrets.POSTGRESQL_ENDPOINT }} \
