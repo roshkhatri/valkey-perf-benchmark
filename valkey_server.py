@@ -170,7 +170,7 @@ class ServerLauncher:
                 if key in configs:
                     overridden.append(key)
                 configs[key] = str(value)
-            
+
             if overridden:
                 logging.warning(
                     f"Custom configs overriding benchmark defaults: {', '.join(sorted(overridden))}"
@@ -183,7 +183,7 @@ class ServerLauncher:
             cmd += ["taskset", "-c", self.cores]
 
         cmd.append(VALKEY_SERVER)
-        
+
         # Add all configs to command
         for key, value in configs.items():
             cmd.extend([f"--{key}", value])
