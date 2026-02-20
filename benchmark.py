@@ -189,7 +189,7 @@ def validate_config(cfg: dict) -> None:
                     )
             # Validate optional custom-server-configs
             elif k == "custom-server-configs":
-                if not isinstance(cfg["custom-server-configs"], dict):
+                if not isinstance(cfg[k]], dict):
                     raise ValueError("'custom-server-configs' must be a dictionary")
                 # Validate that all keys and values are strings or can be converted to strings
                 for key, value in cfg["custom-server-configs"].items():
