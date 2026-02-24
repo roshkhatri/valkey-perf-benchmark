@@ -23,16 +23,22 @@ class ServerLauncher:
         results_dir: str,
         valkey_path: str = "../valkey",
         cores: Optional[str] = None,
+        target_ip: str = "127.0.0.1",
     ) -> None:
         self.results_dir = results_dir
         self.valkey_path = valkey_path
         self.cores = cores
+        self.target_ip = target_ip
+        self.module_path = None  # Will be set during launch
+        self.cluster_nodes = []  # Track multiple node processes
 
-    def _create_client(self, tls_mode: bool) -> valkey.Valkey:
+    def _create_client(
+        self, tls_mode: bool, host: str = "127.0.0.1", port: int = DEFAULT_PORT
+    ) -> valkey.Valkey:
         """Return a Valkey client for server management."""
         kwargs = {
-            "host": "127.0.0.1",
-            "port": DEFAULT_PORT,
+            "host": host,
+            "port": port,
             "decode_responses": True,
             "socket_timeout": 5,
             "socket_connect_timeout": 5,
@@ -86,6 +92,103 @@ class ServerLauncher:
             logging.error(f"Unexpected error while running: {cmd_str}")
             raise RuntimeError(f"Unexpected error: {cmd_str}") from e
 
+    def _get_tls_args(self, for_cli: bool = False) -> list:
+        """Get TLS arguments for valkey-server or valkey-cli."""
+        tls_path = f"{self.valkey_path}/tests/tls"
+
+        if for_cli:
+            return [
+                "--tls",
+                "--cert",
+                f"{tls_path}/valkey.crt",
+                "--key",
+                f"{tls_path}/valkey.key",
+                "--cacert",
+                f"{tls_path}/ca.crt",
+            ]
+        else:
+            return [
+                "--tls-cert-file",
+                f"{tls_path}/valkey.crt",
+                "--tls-key-file",
+                f"{tls_path}/valkey.key",
+                "--tls-ca-cert-file",
+                f"{tls_path}/ca.crt",
+            ]
+
+    def _build_server_command(
+        self,
+        port: int,
+        bind_ip: Optional[str],
+        cpu_range: Optional[str],
+        tls_mode: bool,
+        cluster_mode: bool,
+        io_threads: Optional[int],
+        module_path: Optional[str],
+        log_file: str,
+    ) -> list:
+        """Build valkey-server command with common configuration."""
+        cmd = []
+
+        # CPU pinning
+        if cpu_range:
+            cmd += ["taskset", "-c", cpu_range]
+
+        cmd.append(VALKEY_SERVER)
+
+        # Port and TLS configuration
+        if tls_mode:
+            cmd += ["--tls-port", str(port), "--port", "0"]
+            cmd.extend(self._get_tls_args())
+        else:
+            cmd += ["--port", str(port)]
+
+        # Bind IP (for multi-node clusters)
+        if bind_ip:
+            cmd += ["--bind", bind_ip]
+
+        # Optional configurations
+        if io_threads is not None:
+            cmd += ["--io-threads", str(io_threads)]
+
+        # Modules
+        if hasattr(self, "modules") and self.modules:
+            for module in self.modules:
+                if module.get("startup_args"):
+                    loadmodule_param = f"--loadmodule {module['path']} {' '.join(module['startup_args'])}"
+                    cmd.append(loadmodule_param)
+                else:
+                    cmd += ["--loadmodule", module["path"]]
+
+        # Cluster
+        if cluster_mode and hasattr(self, "target_ip"):
+            cluster_config_dir = (
+                self.config.get("cluster_config_dir", ".") if self.config else "."
+            )
+            cmd += ["--cluster-config-file", f"{cluster_config_dir}/nodes-{port}.conf"]
+            if not bind_ip:
+                cmd += ["--cluster-announce-ip", self.target_ip]
+
+        # Common server configuration
+        cmd += [
+            "--cluster-enabled",
+            "yes" if cluster_mode else "no",
+            "--daemonize",
+            "yes",
+            "--maxmemory-policy",
+            "allkeys-lru",
+            "--appendonly",
+            "no",
+            "--protected-mode",
+            "no",
+            "--logfile",
+            log_file,
+            "--save",
+            "''",
+        ]
+
+        return cmd
+
     def _wait_for_server_ready(
         self, tls_mode: bool, timeout: int = DEFAULT_TIMEOUT
     ) -> None:
@@ -124,42 +227,29 @@ class ServerLauncher:
                     logging.warning(f"Error closing client connection: {e}")
 
     def _launch_server(
-        self, tls_mode: bool, cluster_mode: bool, io_threads: Optional[int] = None
+        self,
+        tls_mode: bool,
+        cluster_mode: bool,
+        io_threads: Optional[int] = None,
+        module_path: Optional[str] = None,
     ) -> None:
         """Start Valkey server."""
         log_file = f"{Path.cwd()}/{self.results_dir}/valkey_log_cluster_{'enabled' if cluster_mode else 'disabled'}_tls_{'enabled' if tls_mode else 'disabled'}.log"
 
-        cmd = []
-        if self.cores:
-            cmd += ["taskset", "-c", self.cores]
-
-        cmd.append(VALKEY_SERVER)
-        # Add TLS args or standard port args
-        if tls_mode:
-            cmd += ["--tls-port", "6379"]
-            cmd += ["--port", "0"]
-            cmd += ["--tls-cert-file", "./tests/tls/valkey.crt"]
-            cmd += ["--tls-key-file", "./tests/tls/valkey.key"]
-            cmd += ["--tls-ca-cert-file", "./tests/tls/ca.crt"]
-        else:
-            cmd += ["--port", "6379"]
-
-        # Add io-threads if specified
-        if io_threads is not None:
-            cmd += ["--io-threads", str(io_threads)]
-
-        # Add common base server args
-        cmd += ["--cluster-enabled", "yes" if cluster_mode else "no"]
-        cmd += ["--daemonize", "yes"]
-        cmd += ["--maxmemory-policy", "allkeys-lru"]
-        cmd += ["--appendonly", "no"]
-        cmd += ["--protected-mode", "no"]
-        cmd += ["--logfile", log_file]
-        cmd += ["--save", "''"]
+        cmd = self._build_server_command(
+            port=6379,
+            bind_ip=None,
+            cpu_range=self.cores,
+            tls_mode=tls_mode,
+            cluster_mode=cluster_mode,
+            io_threads=io_threads,
+            module_path=module_path,
+            log_file=log_file,
+        )
 
         self._run(cmd, cwd=self.valkey_path)
         logging.info(
-            f"Started Valkey Server | TLS: {tls_mode} | Cluster: {cluster_mode} | IO Threads: {io_threads} '"
+            f"Started Valkey Server | TLS: {tls_mode} | Cluster: {cluster_mode} | IO Threads: {io_threads} | Module: {module_path or 'None'}"
         )
         self._wait_for_server_ready(tls_mode=tls_mode)
 
@@ -233,17 +323,160 @@ class ServerLauncher:
             f"slots_ok={cluster_slots_ok}, known_nodes={cluster_known_nodes}"
         )
 
+    def _launch_cluster_node(
+        self,
+        port: int,
+        cpu_range: str,
+        bind_ip: str,
+        tls_mode: bool,
+        io_threads: Optional[int],
+        module_path: Optional[str],
+        node_id: int,
+    ) -> None:
+        """Launch a single cluster node."""
+        log_file = f"{Path.cwd()}/{self.results_dir}/valkey_cluster_node{node_id}_port{port}.log"
+
+        cmd = self._build_server_command(
+            port=port,
+            bind_ip=bind_ip,
+            cpu_range=cpu_range,
+            tls_mode=tls_mode,
+            cluster_mode=True,
+            io_threads=io_threads,
+            module_path=module_path,
+            log_file=log_file,
+        )
+
+        self._run(cmd, cwd=self.valkey_path)
+        logging.info(
+            f"Cluster node {node_id} started on {bind_ip}:{port}, cores {cpu_range}"
+        )
+
+        # Wait for node to be ready (coordinator initialization takes longer)
+        logging.info(f"Waiting for node {node_id} to be ready...")
+        # Use target_ip for health check (works whether bind_ip specified or not)
+        check_host = self.target_ip if not bind_ip else bind_ip
+        client = self._create_client(tls_mode, host=check_host, port=port)
+        try:
+            start = time.time()
+            while time.time() - start < 30:
+                try:
+                    client.ping()
+                    logging.info(f"Node {node_id} ready")
+                    break
+                except Exception as e:
+                    logging.debug(f"Node {node_id} not ready: {e}")
+                    time.sleep(0.5)
+        finally:
+            client.close()
+
+        # Track node for cleanup
+        self.cluster_nodes.append({"port": port, "bind_ip": bind_ip})
+
+    def _create_multi_node_cluster(
+        self,
+        ports: list,
+        bind_ip: Optional[str],
+        tls_mode: bool,
+    ) -> None:
+        """Create cluster using valkey-cli and verify readiness."""
+        logging.info(f"Creating {len(ports)}-node cluster...")
+
+        # Use target_ip for cluster creation (where to connect)
+        cluster_ip = self.target_ip
+        node_addresses = [f"{cluster_ip}:{port}" for port in ports]
+
+        cmd = (
+            [f"{self.valkey_path}/src/valkey-cli", "--cluster", "create"]
+            + node_addresses
+            + ["--cluster-replicas", "0", "--cluster-yes"]
+        )
+
+        if tls_mode:
+            cmd.extend(self._get_tls_args(for_cli=True))
+
+        try:
+            result = self._run(cmd, timeout=120)
+            logging.info(f"Cluster creation command completed")
+            if result.stdout:
+                logging.info(f"Cluster creation output:\n{result.stdout}")
+
+            # Verify cluster is ready (connect to first node and reuse verification)
+            logging.info("Verifying cluster readiness...")
+            # Use target_ip for cluster verification
+            verify_host = self.target_ip if not bind_ip else bind_ip
+            client = self._create_client(tls_mode, host=verify_host, port=ports[0])
+            try:
+                self._wait_for_cluster_ready(client)
+                logging.info(f"{len(ports)}-node cluster ready for requests")
+            finally:
+                client.close()
+
+        except Exception as e:
+            logging.error(f"Cluster creation failed: {e}")
+            raise
+
     def launch(
-        self, cluster_mode: bool, tls_mode: bool, io_threads: Optional[int] = None
+        self,
+        cluster_mode: bool,
+        tls_mode: bool,
+        io_threads: Optional[int] = None,
+        module_path: Optional[str] = None,
+        config: Optional[dict] = None,
     ) -> None:
         """Launch Valkey server and setup cluster if needed."""
+        self.config = config
+        self.module_path = module_path
+
+        # Setup modules: CLI overrides config path
+        if module_path:
+            startup_args = []
+            if config and config.get("modules"):
+                startup_args = config["modules"][0].get("startup_args", [])
+            self.modules = [{"path": module_path, "startup_args": startup_args}]
+        elif config and "modules" in config:
+            self.modules = config["modules"]
+        else:
+            self.modules = []
+
         try:
-            self._launch_server(
-                tls_mode=tls_mode, cluster_mode=cluster_mode, io_threads=io_threads
-            )
-            if cluster_mode:
-                self._setup_cluster(tls_mode=tls_mode)
-            logging.info("Valkey server launched successfully.")
+            if cluster_mode and config and "cluster_nodes" in config:
+                logging.info(f"Launching {config['cluster_nodes']}-node cluster...")
+
+                ports = config["cluster_ports"]
+
+                cpu_ranges = config.get("server_cpu_ranges", [])
+                if not cpu_ranges:
+                    cpu_ranges = config.get("cluster_cpu_ranges", [])
+
+                bind_ip = config.get("bind_ip")
+
+                # Launch all nodes
+                for i, (port, cpu_range) in enumerate(zip(ports, cpu_ranges)):
+                    self._launch_cluster_node(
+                        port=port,
+                        cpu_range=cpu_range,
+                        bind_ip=bind_ip,
+                        tls_mode=tls_mode,
+                        io_threads=io_threads,
+                        module_path=module_path,
+                        node_id=i,
+                    )
+
+                # Create cluster
+                self._create_multi_node_cluster(ports, bind_ip, tls_mode)
+                logging.info("Multi-node cluster launched successfully.")
+            else:
+                # Single-node (existing behavior)
+                self._launch_server(
+                    tls_mode=tls_mode,
+                    cluster_mode=cluster_mode,
+                    io_threads=io_threads,
+                    module_path=module_path,
+                )
+                if cluster_mode:
+                    self._setup_cluster(tls_mode=tls_mode)
+                logging.info("Valkey server launched successfully.")
         except Exception as e:
             logging.error(f"Failed to launch Valkey server: {e}")
             self.shutdown(tls_mode)
@@ -252,20 +485,56 @@ class ServerLauncher:
     def shutdown(self, tls_mode: bool) -> None:
         """Gracefully shutdown the Valkey server."""
         logging.info("Shutting down Valkey server...")
-        try:
-            with self._client_context(tls_mode) as client:
-                client.shutdown(nosave=True)
-                logging.info("Shutdown command sent to server.")
-        except Exception as e:
-            logging.warning(f"Could not send shutdown command: {e}")
-            # Try to kill the process directly
-            try:
-                self._run(["pkill", "-f", VALKEY_SERVER], timeout=10)
-                logging.info("Valkey server process killed.")
-            except Exception as kill_error:
-                logging.error(f"Failed to kill Valkey server process: {kill_error}")
 
-        # Wait for process to actually stop
+        # Multi-node cluster: shutdown each node individually
+        if self.cluster_nodes:
+            logging.info(f"Shutting down {len(self.cluster_nodes)} cluster nodes...")
+            for node in self.cluster_nodes:
+                try:
+                    client = self._create_client(
+                        tls_mode, host=self.target_ip, port=node["port"]
+                    )
+                    client.shutdown(nosave=True)
+                    client.close()
+                    logging.info(f"Shutdown node on port {node['port']}")
+                except Exception as e:
+                    logging.warning(f"Could not shutdown node {node['port']}: {e}")
+
+            # Clean cluster config files
+            try:
+                cluster_config_dir = (
+                    self.config.get("cluster_config_dir", ".") if self.config else "."
+                )
+                cleanup_path = (
+                    self.valkey_path
+                    if cluster_config_dir == "."
+                    else cluster_config_dir
+                )
+                subprocess.run(
+                    ["bash", "-c", "rm -f nodes-*.conf"],
+                    cwd=cleanup_path,
+                    timeout=5,
+                    check=False,
+                )
+                logging.info("Cleaned cluster config files")
+            except Exception as e:
+                logging.warning(f"Could not clean cluster config files: {e}")
+        else:
+            # Single node: shutdown via default connection
+            try:
+                with self._client_context(tls_mode) as client:
+                    client.shutdown(nosave=True)
+                    logging.info("Shutdown command sent to server.")
+            except Exception as e:
+                logging.warning(f"Could not send shutdown command: {e}")
+
+        # Fallback: kill any remaining processes
+        try:
+            subprocess.run(["pkill", "-f", VALKEY_SERVER], timeout=10, check=False)
+        except Exception as e:
+            logging.debug(f"pkill fallback failed: {e}")
+
+        # Wait for all processes to stop
         self._wait_for_process_shutdown()
 
     def _wait_for_process_shutdown(self, timeout: int = 10) -> None:

@@ -35,3 +35,10 @@ dashboards/*.pem
 
 # Logs
 *.log
+
+# Datasets - generated/downloaded via scripts/setup_datasets.py
+datasets/*
+
+# Flamegraph scripts (downloaded on demand from GitHub) and we cache them
+scripts/stackcollapse-perf.pl
+scripts/flamegraph.pl
