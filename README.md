@@ -61,6 +61,7 @@ valkey-perf-benchmark/
 ├── profiler.py              # Generic performance profiler (flamegraphs)
 ├── cpu_monitor.py           # Generic CPU monitoring
 ├── process_metrics.py       # Processes and formats benchmark results
+├── tests/                   # Unit tests (pytest + hypothesis)
 ├── scripts/                 # Helper scripts
 │   ├── setup_datasets.py   # FTS dataset generator
 │   ├── flamegraph.pl       # Flamegraph visualization
@@ -70,6 +71,7 @@ valkey-perf-benchmark/
 │   ├── search_terms.csv
 │   └── proximity_phrases.csv
 └── requirements.txt         # Python dependencies
+└── requirements-test.txt    # Test dependencies (pytest, hypothesis)
 ```
 
 Each benchmark run clones a fresh copy of the Valkey repository for the target commit. When `--valkey-path` is omitted, the repository is cloned into `valkey_<commit>` and removed after the run to maintain build isolation and repeatability.
@@ -376,6 +378,20 @@ For local development, simply run:
 ```bash
 python benchmark.py
 ```
+
+### Running Tests
+
+The project includes a test suite covering core logic functions (parsing, validation, statistics, metrics processing, etc.). Tests run without requiring a Valkey server or PostgreSQL.
+
+```bash
+# Install test dependencies
+pip install -r requirements-test.txt
+
+# Run all tests
+python -m pytest tests/ -v
+```
+
+Tests are automatically run on every push and pull request via GitHub Actions (`.github/workflows/tests.yml`).
 
 ### Adding New Configurations
 
