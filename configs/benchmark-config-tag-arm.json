@@ -1,24 +1,26 @@
-{
-  "duration": 180,
-  "cluster_mode": false,
-  "tls_mode": false,
-  "warmup": 30,
-  "io-threads": [1, 9],
-  "benchmark-threads": 90,
-  "server_cpu_range": "0-8",
-  "client_cpu_range": "96-191",
-  "test_groups": [
-    {
-      "matrix": {
-        "data_size": [16, 512],
-        "pipeline": [1, 10],
-        "clients": [1600],
-        "keyspacelen": [3000000]
-      },
-      "scenarios": [
-        {"id": "set", "type": "write", "command": "SET"},
-        {"id": "get", "type": "read", "command": "GET", "auto_populate": true, "populate_command": "SET"}
-      ]
-    }
-  ]
-}
+[
+  {
+    "cluster_mode": false,
+    "tls_mode": false,
+    "io-threads": [1, 9],
+    "benchmark-threads": 90,
+    "server_cpu_range": "0-8",
+    "client_cpu_range": "96-191",
+    "test_groups": [
+      {
+        "group": 1,
+        "description": "ARM tag SET/GET sweep",
+        "matrix": {
+          "data_size": [16, 512],
+          "pipeline": [1, 10],
+          "clients": [1600],
+          "keyspacelen": [3000000]
+        },
+        "scenarios": [
+          {"id": "set", "type": "write", "command": "SET", "duration": 180, "warmup": 30},
+          {"id": "get", "type": "read", "command": "GET", "duration": 180, "warmup": 30, "auto_populate": true, "populate_command": "SET"}
+        ]
+      }
+    ]
+  }
+]

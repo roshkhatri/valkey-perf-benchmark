@@ -1,26 +1,28 @@
-{
-  "requests": [10000000],
-  "cluster_mode": true,
-  "tls_mode": true,
-  "warmup": 10,
-  "io-threads": [2],
-  "server_cpu_range": "0-1",
-  "client_cpu_range": "3",
-  "test_groups": [
-    {
-      "scenarios": [
-        {"id": "set", "type": "write", "command": "SET", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "mset", "type": "write", "command": "MSET", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "incr", "type": "write", "command": "INCR", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "lpush", "type": "write", "command": "LPUSH", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "rpush", "type": "write", "command": "RPUSH", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "lpop", "type": "write", "command": "LPOP", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "rpop", "type": "write", "command": "RPOP", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "sadd", "type": "write", "command": "SADD", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "hset", "type": "write", "command": "HSET", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "zadd", "type": "write", "command": "ZADD", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
-        {"id": "xadd", "type": "write", "command": "XADD", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]}
-      ]
-    }
-  ]
-}
+[
+  {
+    "cluster_mode": true,
+    "tls_mode": true,
+    "io-threads": [2],
+    "server_cpu_range": "0-1",
+    "client_cpu_range": "3",
+    "test_groups": [
+      {
+        "group": 1,
+        "description": "Cluster TLS write benchmarks",
+        "scenarios": [
+          {"id": "set", "type": "write", "command": "SET", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "mset", "type": "write", "command": "MSET", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "incr", "type": "write", "command": "INCR", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "lpush", "type": "write", "command": "LPUSH", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "rpush", "type": "write", "command": "RPUSH", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "lpop", "type": "write", "command": "LPOP", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "rpop", "type": "write", "command": "RPOP", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "sadd", "type": "write", "command": "SADD", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "hset", "type": "write", "command": "HSET", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "zadd", "type": "write", "command": "ZADD", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10},
+          {"id": "xadd", "type": "write", "command": "XADD", "data_size": 16, "pipeline": 10, "clients": 50, "keyspacelen": 10000000, "requests": 10000000, "warmup": 10}
+        ]
+      }
+    ]
+  }
+]
