@@ -18,6 +18,7 @@ from process_metrics import MetricsProcessor
 from valkey_server import ServerLauncher
 from profiler import PerformanceProfiler
 from utils.git_utils import resolve_ref, get_commit_timestamp
+from cachecannon_runner import supports_command as cachecannon_supports, run_cachecannon
 
 # Constants
 VALKEY_BENCHMARK = "src/valkey-benchmark"
@@ -85,6 +86,8 @@ class ClientRunner:
         architecture: Optional[str] = None,
         uses_test_groups: bool = False,
         repository: Optional[str] = None,
+        benchmark_tool: str = "valkey-benchmark",
+        cachecannon_path: str = "cachecannon",
     ) -> None:
         self.commit_id = commit_id
         self.config = config
@@ -102,6 +105,8 @@ class ClientRunner:
         self.architecture = architecture
         self.uses_test_groups = uses_test_groups
         self.repository = repository
+        self.benchmark_tool = benchmark_tool
+        self.cachecannon_path = cachecannon_path
         self.current_profiling_set = {"enabled": False}
         self.current_config_set = {}
         self.config_suffix = "default"
@@ -472,7 +477,46 @@ class ClientRunner:
                 data["seed"],
             )
 
-        # Run benchmark
+        # Use cachecannon for supported commands when selected
+        if (
+            self.benchmark_tool == "cachecannon"
+            and cachecannon_supports(data["command"])
+        ):
+            logging.info(f"Using cachecannon for {data['command']}")
+            row = run_cachecannon(
+                target_ip=self.target_ip,
+                port=self.config.get("port", DEFAULT_PORT),
+                duration=data["duration"],
+                requests=data["requests"],
+                warmup=data["warmup"],
+                data_size=data["data_size"],
+                keyspacelen=data["keyspacelen"],
+                pipeline=data["pipeline"],
+                clients=data["clients"],
+                command=data["command"],
+                cluster_mode=self.cluster_mode,
+                tls_mode=self.tls_mode,
+                threads=self.benchmark_threads,
+                cpu_list=self.cores,
+                cachecannon_path=self.cachecannon_path,
+            )
+            if row and metrics_processor:
+                metrics = metrics_processor.create_metrics(
+                    row,
+                    data["command"],
+                    data["data_size"],
+                    data["pipeline"],
+                    data["clients"],
+                    data["requests"],
+                    data["warmup"],
+                    data["duration"],
+                )
+                if metrics:
+                    metrics["benchmark_tool"] = "cachecannon"
+                    return metrics
+            return None
+
+        # Run benchmark (valkey-benchmark)
         bench_cmd = self._build_benchmark_command(
             tls=self.tls_mode,
             requests=data["requests"],

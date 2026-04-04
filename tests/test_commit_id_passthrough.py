@@ -39,6 +39,8 @@ def mock_args(tmp_path):
         runs=1,
         target_ip="127.0.0.1",
         repository=None,
+        benchmark_tool="valkey-benchmark",
+        cachecannon_path="cachecannon",
     )
 
 
@@ -59,7 +61,6 @@ class TestCommitIdPassthrough:
             valkey_dir=tmp_path,
             commit_id="abc123def456",
             module_path=None,
-            uses_test_groups=False,
             architecture="x86_64",
             client_cpu_ranges=None,
         )
@@ -82,7 +83,6 @@ class TestCommitIdPassthrough:
             valkey_dir=tmp_path,
             commit_id="9a29b97a8e80e07e6db1758f8c74bfd5db2becc6",
             module_path=None,
-            uses_test_groups=False,
             architecture="x86_64",
             client_cpu_ranges=None,
         )

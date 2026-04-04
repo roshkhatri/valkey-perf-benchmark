@@ -126,6 +126,7 @@ class ServerLauncher:
         io_threads: Optional[int],
         module_path: Optional[str],
         log_file: str,
+        server_startup_config: Optional[dict] = None,
     ) -> list:
         """Build valkey-server command with common configuration."""
         cmd = []
@@ -175,17 +176,20 @@ class ServerLauncher:
             "yes" if cluster_mode else "no",
             "--daemonize",
             "yes",
-            "--maxmemory-policy",
-            "allkeys-lru",
-            "--appendonly",
-            "no",
-            "--protected-mode",
-            "no",
             "--logfile",
             log_file,
-            "--save",
-            "''",
         ]
+
+        # Overridable defaults
+        defaults = {
+            "maxmemory-policy": "allkeys-lru",
+            "appendonly": "no",
+            "protected-mode": "no",
+            "save": "''",
+        }
+        effective = {**defaults, **(server_startup_config or {})}
+        for k, v in effective.items():
+            cmd += [f"--{k}", str(v)]
 
         return cmd
 
@@ -232,6 +236,7 @@ class ServerLauncher:
         cluster_mode: bool,
         io_threads: Optional[int] = None,
         module_path: Optional[str] = None,
+        server_startup_config: Optional[dict] = None,
     ) -> None:
         """Start Valkey server."""
         log_file = f"{Path.cwd()}/{self.results_dir}/valkey_log_cluster_{'enabled' if cluster_mode else 'disabled'}_tls_{'enabled' if tls_mode else 'disabled'}.log"
@@ -245,6 +250,7 @@ class ServerLauncher:
             io_threads=io_threads,
             module_path=module_path,
             log_file=log_file,
+            server_startup_config=server_startup_config,
         )
 
         self._run(cmd, cwd=self.valkey_path)
@@ -332,6 +338,7 @@ class ServerLauncher:
         io_threads: Optional[int],
         module_path: Optional[str],
         node_id: int,
+        server_startup_config: Optional[dict] = None,
     ) -> None:
         """Launch a single cluster node."""
         log_file = f"{Path.cwd()}/{self.results_dir}/valkey_cluster_node{node_id}_port{port}.log"
@@ -345,6 +352,7 @@ class ServerLauncher:
             io_threads=io_threads,
             module_path=module_path,
             log_file=log_file,
+            server_startup_config=server_startup_config,
         )
 
         self._run(cmd, cwd=self.valkey_path)
@@ -439,6 +447,8 @@ class ServerLauncher:
         else:
             self.modules = []
 
+        server_startup_config = config.get("server_startup_config") if config else None
+
         try:
             if cluster_mode and config and "cluster_nodes" in config:
                 logging.info(f"Launching {config['cluster_nodes']}-node cluster...")
@@ -461,6 +471,7 @@ class ServerLauncher:
                         io_threads=io_threads,
                         module_path=module_path,
                         node_id=i,
+                        server_startup_config=server_startup_config,
                     )
 
                 # Create cluster
@@ -473,6 +484,7 @@ class ServerLauncher:
                     cluster_mode=cluster_mode,
                     io_threads=io_threads,
                     module_path=module_path,
+                    server_startup_config=server_startup_config,
                 )
                 if cluster_mode:
                     self._setup_cluster(tls_mode=tls_mode)

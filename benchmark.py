@@ -2,11 +2,12 @@
 """Command-line interface to run Valkey benchmarks."""
 
 import argparse
+import itertools
 import json
 import logging
 import platform
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 import sys
 
 
@@ -23,37 +24,7 @@ from utils.cpu_utils import (
 
 # ---------- Constants --------------------------------------------------------
 DEFAULT_RESULTS_ROOT = Path("results")
-REQUIRED_KEYS = [
-    "keyspacelen",
-    "data_sizes",
-    "pipelines",
-    "clients",
-    "commands",
-    "cluster_mode",
-    "tls_mode",
-    "warmup",
-]
-
-OPTIONAL_CONF_KEYS = [
-    "io-threads",
-    "server_cpu_range",
-    "client_cpu_range",
-    "benchmark-threads",
-    "requests",
-    "duration",
-    "test_groups",
-    "cpu_allocation",
-    "cluster_nodes",
-    "cluster_ports",
-    "bind_ip",
-    "config_sets",
-    "profiling_sets",
-    "monitoring",
-    "dataset_generation",
-    "query_generation",
-    "port",
-    "module_startup_args",
-]
+ALLOWED_MATRIX_KEYS = {"data_size", "pipeline", "clients", "keyspacelen"}
 
 
 # ---------- CLI --------------------------------------------------------------
@@ -206,6 +177,20 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--benchmark-tool",
+        choices=["valkey-benchmark", "cachecannon"],
+        default="valkey-benchmark",
+        help="Benchmark tool to use. 'cachecannon' is only used for GET/SET commands; "
+        "other commands automatically fall back to valkey-benchmark.",
+    )
+
+    parser.add_argument(
+        "--cachecannon-path",
+        default="cachecannon",
+        help="Path to cachecannon binary (default: 'cachecannon' from PATH).",
+    )
+
+    parser.add_argument(
         "--cluster-mode-filter",
         choices=["false", "true"],
         default=None,
@@ -269,50 +254,135 @@ def _validate_cpu_range(value, key_name: str) -> None:
 # ---------- Helpers ----------------------------------------------------------
 
 
+_MATRIX_KEY_PREFIX: Dict[str, str] = {
+    "data_size": "d",
+    "pipeline": "p",
+    "clients": "c",
+    "keyspacelen": "k",
+}
+
+
+def expand_matrix(test_group: dict) -> dict:
+    """Expand a test group's matrix into per-combination scenarios via Cartesian product.
+
+    If no ``matrix`` key is present (or it is empty), returns a shallow copy unchanged.
+    Scenario-level values take precedence over matrix values.
+    """
+    matrix = test_group.get("matrix")
+    if not matrix:
+        return {k: v for k, v in test_group.items() if k != "matrix"}
+
+    keys = list(matrix.keys())
+    values = [matrix[k] for k in keys]
+    expanded: List[dict] = []
+
+    for scenario in test_group["scenarios"]:
+        for combo in itertools.product(*values):
+            new = {**scenario}
+            suffix_parts: List[str] = []
+            for k, v in zip(keys, combo):
+                if k not in scenario:
+                    new[k] = v
+                suffix_parts.append(f"{_MATRIX_KEY_PREFIX.get(k, k[0])}{scenario.get(k, v)}")
+            base_id = scenario.get("id", "scenario")
+            new["id"] = f"{base_id}_{'_'.join(suffix_parts)}"
+            expanded.append(new)
+
+    result = {k: v for k, v in test_group.items() if k != "matrix"}
+    result["scenarios"] = expanded
+    return result
+
+
+def _validate_matrix(matrix: object, prefix: str) -> None:
+    """Validate matrix dict: allowed keys with lists of positive ints."""
+    if not isinstance(matrix, dict):
+        raise ValueError(f"'{prefix}' must be a dict")
+    for key, val in matrix.items():
+        if key not in ALLOWED_MATRIX_KEYS:
+            raise ValueError(f"'{prefix}' unknown key '{key}'. Allowed: {sorted(ALLOWED_MATRIX_KEYS)}")
+        if not isinstance(val, list):
+            raise ValueError(f"'{prefix}.{key}' must be a list")
+        if len(val) == 0:
+            raise ValueError(f"'{prefix}.{key}' must not be empty")
+        if not all(isinstance(x, int) and x > 0 for x in val):
+            raise ValueError(f"'{prefix}.{key}' must contain only positive integers")
+
+
+def _validate_command_ratio(ratio: object, prefix: str) -> None:
+    """Validate command_ratio dict: non-empty string keys, positive int values summing to 100."""
+    if not isinstance(ratio, dict):
+        raise ValueError(f"'{prefix}' must be a dict")
+    for key, val in ratio.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError(f"'{prefix}' keys must be non-empty strings")
+        if not isinstance(val, int) or val <= 0:
+            raise ValueError(f"'{prefix}' values must be positive integers")
+    if sum(ratio.values()) != 100:
+        raise ValueError(f"'{prefix}' values must sum to 100")
+
+
+def _validate_cachecannon(section: object) -> None:
+    """Validate cachecannon config section."""
+    if not isinstance(section, dict):
+        raise ValueError("'cachecannon' must be a dict")
+    if "threads" in section:
+        _validate_positive_int(section["threads"], "cachecannon.threads")
+
+
+def _validate_server_startup_config(section: object) -> None:
+    """Validate server_startup_config: non-empty string keys, string values."""
+    if not isinstance(section, dict):
+        raise ValueError("'server_startup_config' must be a dict")
+    for key, val in section.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("'server_startup_config' keys must be non-empty strings")
+        if not isinstance(val, str):
+            raise ValueError(f"'server_startup_config.{key}' value must be a string")
+
+
 def validate_config(cfg: dict) -> None:
-    """Validate config (commands or test_groups format)."""
+    """Validate config in unified test_groups format."""
     if "scenarios" in cfg and "test_groups" not in cfg:
         cfg["test_groups"] = [{"scenarios": cfg["scenarios"]}]
         del cfg["scenarios"]
 
-    has_commands = "commands" in cfg
-    has_test_groups = "test_groups" in cfg
+    if "test_groups" not in cfg:
+        raise ValueError("Config must have 'test_groups'")
 
-    if not (has_commands or has_test_groups):
-        raise ValueError("Config must have either 'commands' or 'test_groups'")
+    validate_test_groups(cfg)
 
-    if has_commands:
-        for k in REQUIRED_KEYS:
-            if k not in cfg:
-                raise ValueError(f"Missing required key: {k}")
+    # Validate each scenario
+    for i, group in enumerate(cfg["test_groups"]):
+        # Validate matrix on group
+        if "matrix" in group:
+            _validate_matrix(group["matrix"], f"test_groups[{i}].matrix")
 
-        has_requests = "requests" in cfg and cfg["requests"] is not None
-        has_duration = "duration" in cfg and cfg["duration"] is not None
+        for j, scenario in enumerate(group["scenarios"]):
+            prefix = f"test_groups[{i}].scenarios[{j}]"
 
-        if not has_requests and not has_duration:
-            raise ValueError("Either 'requests' or 'duration' must be provided")
-        if has_requests and has_duration:
-            raise ValueError("Cannot specify both 'requests' and 'duration'")
+            if "command" not in scenario or not isinstance(scenario["command"], str) or not scenario["command"].strip():
+                raise ValueError(f"{prefix} must have a non-empty 'command' string")
 
-        # Use helpers for validation
-        _validate_positive_int_list(cfg["keyspacelen"], "keyspacelen")
-        _validate_positive_int_list(cfg["data_sizes"], "data_sizes")
-        _validate_positive_int_list(cfg["pipelines"], "pipelines")
-        _validate_positive_int_list(cfg["clients"], "clients")
-        _validate_non_negative_int(cfg["warmup"], "warmup")
+            has_requests = "requests" in scenario and scenario["requests"] is not None
+            has_duration = "duration" in scenario and scenario["duration"] is not None
+            if has_requests and has_duration:
+                raise ValueError(f"{prefix} cannot have both 'requests' and 'duration'")
 
-        # Validate commands (special case: non-empty strings)
-        if (
-            not isinstance(cfg["commands"], list)
-            or not cfg["commands"]
-            or not all(isinstance(x, str) and x.strip() for x in cfg["commands"])
-        ):
-            raise ValueError("'commands' must be a non-empty list of non-empty strings")
+            if "clients" in scenario:
+                if not isinstance(scenario["clients"], int) or scenario["clients"] <= 0:
+                    raise ValueError(f"{prefix}.clients must be a positive integer")
 
-    if has_test_groups:
-        validate_test_groups(cfg)
+            if "command_ratio" in scenario:
+                _validate_command_ratio(scenario["command_ratio"], f"{prefix}.command_ratio")
 
-    # Validate optional keys using helpers
+    # Validate top-level optional sections
+    if "cachecannon" in cfg:
+        _validate_cachecannon(cfg["cachecannon"])
+
+    if "server_startup_config" in cfg:
+        _validate_server_startup_config(cfg["server_startup_config"])
+
+    # Validate shared optional keys
     if "io-threads" in cfg:
         _validate_positive_int_or_list(cfg["io-threads"], "io-threads")
     if "benchmark-threads" in cfg:
@@ -344,6 +414,8 @@ def load_configs(path: str) -> List[dict]:
         configs = json.load(fp)
     for c in configs:
         validate_config(c)
+        if "test_groups" in c:
+            c["test_groups"] = [expand_matrix(g) for g in c["test_groups"]]
     return configs
 
 
@@ -451,7 +523,6 @@ def run_benchmark_matrix(
     cfg: dict,
     args: argparse.Namespace,
     module_path: Optional[str] = None,
-    uses_test_groups: bool = False,
 ) -> None:
     """Orchestrate benchmark execution for all configurations."""
     if args.module:
@@ -500,7 +571,6 @@ def run_benchmark_matrix(
             valkey_dir,
             commit_id,
             module_path,
-            uses_test_groups,
             architecture,
             client_cpu_ranges,
         )
@@ -571,7 +641,6 @@ def _execute_benchmark_run(
     valkey_dir,
     commit_id,
     module_path,
-    uses_test_groups,
     architecture,
     client_cpu_ranges,
 ):
@@ -639,8 +708,10 @@ def _execute_benchmark_run(
             runs=args.runs,
             server_launcher=launcher,
             architecture=architecture,
-            uses_test_groups=uses_test_groups,
+            uses_test_groups=True,
             repository=args.repository,
+            benchmark_tool=args.benchmark_tool,
+            cachecannon_path=args.cachecannon_path,
         )
 
         runner.current_profiling_set = exec_config["profiling_set"]
@@ -729,8 +800,6 @@ def main() -> None:
     config = configs_list[0]
     validate_cpu_allocation(config)
 
-    uses_test_groups = "test_groups" in config
-
     module_path = get_module_binary_path(args, config)
 
     # Module testing requires valkey-path
@@ -738,9 +807,7 @@ def main() -> None:
         print("ERROR: Module testing requires --valkey-path")
         sys.exit(1)
 
-    if uses_test_groups and (
-        config.get("dataset_generation") or config.get("query_generation")
-    ):
+    if config.get("dataset_generation") or config.get("query_generation"):
         import subprocess
 
         required_datasets = set()
@@ -781,7 +848,6 @@ def main() -> None:
     # Process all configs
     for cfg in configs_list:
         validate_cpu_allocation(cfg)
-        uses_test_groups = "test_groups" in cfg
 
         # Apply CLI filters to this config
         if args.groups:
@@ -796,7 +862,6 @@ def main() -> None:
                 cfg=cfg,
                 args=args,
                 module_path=module_path,
-                uses_test_groups=uses_test_groups,
             )
 
 

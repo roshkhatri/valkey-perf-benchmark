@@ -1,28 +1,26 @@
-[
-  {
-    "duration": 120,
-    "keyspacelen": [10000000],
-    "data_sizes": [16],
-    "pipelines": [10],
-    "clients": [50],
-    "commands": [
-      "SET",
-      "GET",
-      "RPUSH",
-      "LPUSH",
-      "LPOP",
-      "SADD",
-      "SPOP",
-      "HSET",
-      "MGET",
-      "LRANGE",
-      "ZPOPMIN",
-      "XADD",
-      "XRANGE"
-    ],
-    "cluster_mode": false,
-    "tls_mode": false,
-    "warmup": 10,
-    "benchmark-threads": 2
-  }
-]
+{
+  "duration": 120,
+  "cluster_mode": false,
+  "tls_mode": false,
+  "warmup": 10,
+  "benchmark-threads": 2,
+  "test_groups": [
+    {
+      "scenarios": [
+        {"id": "set", "type": "write", "command": "SET", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
+        {"id": "get", "type": "read", "command": "GET", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16], "auto_populate": true, "populate_command": "SET"},
+        {"id": "rpush", "type": "write", "command": "RPUSH", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
+        {"id": "lpush", "type": "write", "command": "LPUSH", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
+        {"id": "lpop", "type": "write", "command": "LPOP", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
+        {"id": "sadd", "type": "write", "command": "SADD", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
+        {"id": "spop", "type": "read", "command": "SPOP", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16], "auto_populate": true, "populate_command": "SADD"},
+        {"id": "hset", "type": "write", "command": "HSET", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
+        {"id": "mget", "type": "read", "command": "MGET", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16], "auto_populate": true, "populate_command": "MSET"},
+        {"id": "lrange", "type": "read", "command": "LRANGE", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16], "auto_populate": true, "populate_command": "LPUSH"},
+        {"id": "zpopmin", "type": "read", "command": "ZPOPMIN", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16], "auto_populate": true, "populate_command": "ZADD"},
+        {"id": "xadd", "type": "write", "command": "XADD", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16]},
+        {"id": "xrange", "type": "read", "command": "XRANGE", "clients": [50], "pipelines": [10], "keyspacelen": [10000000], "data_sizes": [16], "auto_populate": true, "populate_command": "XADD"}
+      ]
+    }
+  ]
+}

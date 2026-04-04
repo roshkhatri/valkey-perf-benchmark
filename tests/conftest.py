@@ -15,17 +15,18 @@ from valkey_benchmark import ClientRunner
 
 @pytest.fixture
 def minimal_valid_config():
-    """Minimal valid config in commands format."""
+    """Minimal valid config in unified test_groups format."""
     return {
-        "keyspacelen": [1000],
-        "data_sizes": [64],
-        "pipelines": [1],
-        "clients": [50],
-        "commands": ["GET", "SET"],
         "cluster_mode": False,
         "tls_mode": False,
-        "warmup": 0,
-        "requests": [1000],
+        "test_groups": [
+            {
+                "group": 1,
+                "scenarios": [
+                    {"id": "test1", "command": "SET foo bar", "type": "write"}
+                ],
+            }
+        ],
     }
 
 
@@ -72,4 +73,5 @@ def minimal_client_runner(minimal_valid_config):
         results_dir=Path("/tmp/test_results"),
         valkey_path="/tmp/valkey",
         valkey_benchmark_path="src/valkey-benchmark",
+        uses_test_groups=True,
     )

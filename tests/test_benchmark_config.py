@@ -12,103 +12,197 @@ from benchmark import (
     validate_cpu_allocation,
     validate_test_groups,
     _get_active_ports,
+    _validate_matrix,
+    _validate_command_ratio,
+    _validate_cachecannon,
+    _validate_server_startup_config,
 )
 
-# ---------------------------------------------------------------------------
-# validate_config — missing required keys
-# ---------------------------------------------------------------------------
 
+# --- Helpers -----------------------------------------------------------------
 
-class TestValidateConfigMissingKeys:
-    """WHEN validate_config is called with a config missing required keys,
-    it SHALL raise a ValueError."""
-
-    def test_missing_keyspacelen(self, minimal_valid_config):
-        del minimal_valid_config["keyspacelen"]
-        with pytest.raises(ValueError, match="Missing required key"):
-            validate_config(minimal_valid_config)
-
-    def test_missing_commands(self, minimal_valid_config):
-        del minimal_valid_config["commands"]
-        # Without commands AND without test_groups → "must have either"
-        with pytest.raises(ValueError):
-            validate_config(minimal_valid_config)
-
-    def test_missing_warmup(self, minimal_valid_config):
-        del minimal_valid_config["warmup"]
-        with pytest.raises(ValueError, match="Missing required key"):
-            validate_config(minimal_valid_config)
-
-    def test_missing_cluster_mode(self, minimal_valid_config):
-        del minimal_valid_config["cluster_mode"]
-        with pytest.raises(ValueError, match="Missing required key"):
-            validate_config(minimal_valid_config)
+def _make_config(**overrides) -> dict:
+    """Build a minimal valid unified config, applying overrides."""
+    cfg = {
+        "cluster_mode": False,
+        "tls_mode": False,
+        "test_groups": [
+            {"scenarios": [{"id": "s1", "command": "SET foo bar"}]}
+        ],
+    }
+    cfg.update(overrides)
+    return cfg
 
 
 # ---------------------------------------------------------------------------
-# validate_config — both requests and duration
+# validate_config — test_groups required
 # ---------------------------------------------------------------------------
 
 
-class TestValidateConfigBothRequestsAndDuration:
-    """WHEN validate_config is called with both 'requests' and 'duration',
-    it SHALL raise a ValueError."""
+class TestValidateConfigTestGroupsRequired:
+    def test_missing_test_groups_raises_valueerror(self):
+        with pytest.raises(ValueError, match="must have 'test_groups'"):
+            validate_config({"cluster_mode": False, "tls_mode": False})
 
-    def test_both_requests_and_duration(self, minimal_valid_config):
-        minimal_valid_config["duration"] = 10
-        with pytest.raises(ValueError, match="Cannot specify both"):
-            validate_config(minimal_valid_config)
-
-
-# ---------------------------------------------------------------------------
-# validate_config — neither requests nor duration
-# ---------------------------------------------------------------------------
-
-
-class TestValidateConfigNeitherRequestsNorDuration:
-    """WHEN validate_config is called with neither 'requests' nor 'duration',
-    it SHALL raise a ValueError."""
-
-    def test_neither_requests_nor_duration(self, minimal_valid_config):
-        del minimal_valid_config["requests"]
-        with pytest.raises(ValueError, match="Either 'requests' or 'duration'"):
-            validate_config(minimal_valid_config)
-
-    def test_requests_none_and_no_duration(self, minimal_valid_config):
-        minimal_valid_config["requests"] = None
-        with pytest.raises(ValueError, match="Either 'requests' or 'duration'"):
-            validate_config(minimal_valid_config)
+    def test_empty_test_groups_raises_valueerror(self):
+        with pytest.raises(ValueError, match="non-empty list"):
+            validate_config(_make_config(test_groups=[]))
 
 
 # ---------------------------------------------------------------------------
-# validate_config — valid commands-based config
+# validate_config — scenario validation
 # ---------------------------------------------------------------------------
 
 
-class TestValidateConfigCommandsFormat:
-    """WHEN validate_config is called with a valid commands-based config,
-    it SHALL complete without error."""
+class TestValidateConfigScenarios:
+    def test_scenario_missing_command_raises_valueerror(self):
+        cfg = _make_config(test_groups=[{"scenarios": [{"id": "s1"}]}])
+        with pytest.raises(ValueError, match="non-empty 'command' string"):
+            validate_config(cfg)
 
-    def test_valid_commands_config(self, minimal_valid_config):
-        validate_config(minimal_valid_config)  # should not raise
+    def test_scenario_empty_command_raises_valueerror(self):
+        cfg = _make_config(test_groups=[{"scenarios": [{"command": "  "}]}])
+        with pytest.raises(ValueError, match="non-empty 'command' string"):
+            validate_config(cfg)
 
-    def test_valid_commands_config_with_duration(self, minimal_valid_config):
-        del minimal_valid_config["requests"]
-        minimal_valid_config["duration"] = 30
-        validate_config(minimal_valid_config)  # should not raise
+    def test_scenario_both_requests_and_duration_raises_valueerror(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key", "requests": 100, "duration": 10}]}
+        ])
+        with pytest.raises(ValueError, match="cannot have both"):
+            validate_config(cfg)
+
+    def test_scenario_nonpositive_clients_raises_valueerror(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key", "clients": 0}]}
+        ])
+        with pytest.raises(ValueError, match="clients must be a positive integer"):
+            validate_config(cfg)
 
 
 # ---------------------------------------------------------------------------
-# validate_config — valid test_groups-based config
+# validate_config — matrix validation
 # ---------------------------------------------------------------------------
 
 
-class TestValidateConfigTestGroupsFormat:
-    """WHEN validate_config is called with a valid test_groups-based config,
-    it SHALL complete without error."""
+class TestValidateConfigMatrix:
+    def test_matrix_valid_dict_passes(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key"}], "matrix": {"data_size": [64, 128], "clients": [10]}}
+        ])
+        validate_config(cfg)  # should not raise
 
-    def test_valid_test_groups_config(self, minimal_test_groups_config):
-        validate_config(minimal_test_groups_config)  # should not raise
+    def test_matrix_invalid_value_type_raises(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key"}], "matrix": {"data_size": 64}}
+        ])
+        with pytest.raises(ValueError, match="must be a list"):
+            validate_config(cfg)
+
+    def test_matrix_invalid_key_raises(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key"}], "matrix": {"bad_key": [1]}}
+        ])
+        with pytest.raises(ValueError, match="unknown key"):
+            validate_config(cfg)
+
+    def test_matrix_empty_list_raises(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key"}], "matrix": {"data_size": []}}
+        ])
+        with pytest.raises(ValueError, match="must not be empty"):
+            validate_config(cfg)
+
+
+# ---------------------------------------------------------------------------
+# validate_config — cachecannon section
+# ---------------------------------------------------------------------------
+
+
+class TestValidateConfigCachecannon:
+    def test_cachecannon_section_valid_passes(self):
+        cfg = _make_config(cachecannon={"threads": 4})
+        validate_config(cfg)  # should not raise
+
+    def test_cachecannon_section_invalid_threads_raises(self):
+        cfg = _make_config(cachecannon={"threads": -1})
+        with pytest.raises(ValueError, match="cachecannon.threads"):
+            validate_config(cfg)
+
+
+# ---------------------------------------------------------------------------
+# validate_config — command_ratio
+# ---------------------------------------------------------------------------
+
+
+class TestValidateConfigCommandRatio:
+    def test_command_ratio_valid_passes(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key", "command_ratio": {"GET": 70, "SET": 30}}]}
+        ])
+        validate_config(cfg)  # should not raise
+
+    def test_command_ratio_not_summing_to_100_raises(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key", "command_ratio": {"GET": 50, "SET": 40}}]}
+        ])
+        with pytest.raises(ValueError, match="sum to 100"):
+            validate_config(cfg)
+
+    def test_command_ratio_empty_key_raises(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key", "command_ratio": {"": 100}}]}
+        ])
+        with pytest.raises(ValueError, match="non-empty strings"):
+            validate_config(cfg)
+
+    def test_command_ratio_negative_value_raises(self):
+        cfg = _make_config(test_groups=[
+            {"scenarios": [{"command": "GET key", "command_ratio": {"GET": -10, "SET": 110}}]}
+        ])
+        with pytest.raises(ValueError, match="positive integers"):
+            validate_config(cfg)
+
+
+# ---------------------------------------------------------------------------
+# validate_config — server_startup_config
+# ---------------------------------------------------------------------------
+
+
+class TestValidateConfigServerStartupConfig:
+    def test_server_startup_config_valid_passes(self):
+        cfg = _make_config(server_startup_config={"maxmemory": "1gb", "save": ""})
+        validate_config(cfg)  # should not raise
+
+    def test_server_startup_config_empty_key_raises(self):
+        cfg = _make_config(server_startup_config={"": "value"})
+        with pytest.raises(ValueError, match="non-empty strings"):
+            validate_config(cfg)
+
+    def test_server_startup_config_absent_passes(self):
+        cfg = _make_config()
+        validate_config(cfg)  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# validate_config — full valid config
+# ---------------------------------------------------------------------------
+
+
+class TestValidateConfigValid:
+    def test_valid_unified_config_passes(self):
+        cfg = _make_config(
+            port=6379,
+            cachecannon={"threads": 2},
+            server_startup_config={"maxmemory": "1gb"},
+            test_groups=[{
+                "scenarios": [
+                    {"command": "SET foo bar", "clients": 50, "command_ratio": {"SET": 100}},
+                ],
+                "matrix": {"data_size": [64], "pipeline": [1]},
+            }],
+        )
+        validate_config(cfg)  # should not raise
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +211,6 @@ class TestValidateConfigTestGroupsFormat:
 
 
 class TestValidateConfigMutation:
-    """validate_config SHALL convert cluster_mode and tls_mode to bool."""
-
     def test_cluster_mode_string_converted(self, minimal_valid_config):
         minimal_valid_config["cluster_mode"] = "yes"
         validate_config(minimal_valid_config)
@@ -136,8 +228,6 @@ class TestValidateConfigMutation:
 
 
 class TestParseBool:
-    """Tests for parse_bool with booleans, truthy/falsy strings, and other types."""
-
     def test_true(self):
         assert parse_bool(True) is True
 
@@ -166,14 +256,11 @@ class TestParseBool:
 
 
 class TestValidatePositiveIntList:
-    """Tests for _validate_positive_int_list helper."""
-
     def test_valid_list(self):
-        _validate_positive_int_list([1, 2, 3], "test")  # should not raise
+        _validate_positive_int_list([1, 2, 3], "test")
 
     def test_empty_list_accepted(self):
-        # all() on empty iterable is True, so no raise per implementation
-        _validate_positive_int_list([], "test")  # should not raise
+        _validate_positive_int_list([], "test")
 
     def test_not_a_list_raises(self):
         with pytest.raises(ValueError):
@@ -198,10 +285,8 @@ class TestValidatePositiveIntList:
 
 
 class TestValidatePositiveInt:
-    """Tests for _validate_positive_int helper."""
-
     def test_valid(self):
-        _validate_positive_int(5, "test")  # should not raise
+        _validate_positive_int(5, "test")
 
     def test_zero_raises(self):
         with pytest.raises(ValueError):
@@ -222,13 +307,11 @@ class TestValidatePositiveInt:
 
 
 class TestValidateNonNegativeInt:
-    """Tests for _validate_non_negative_int helper."""
-
     def test_zero_valid(self):
-        _validate_non_negative_int(0, "test")  # should not raise
+        _validate_non_negative_int(0, "test")
 
     def test_positive_valid(self):
-        _validate_non_negative_int(10, "test")  # should not raise
+        _validate_non_negative_int(10, "test")
 
     def test_negative_raises(self):
         with pytest.raises(ValueError):
@@ -245,10 +328,8 @@ class TestValidateNonNegativeInt:
 
 
 class TestValidateCpuAllocation:
-    """Tests for validate_cpu_allocation."""
-
     def test_no_cpu_fields_passes(self):
-        validate_cpu_allocation({})  # should not raise
+        validate_cpu_allocation({})
 
     def test_mutually_exclusive_raises(self):
         cfg = {
@@ -288,15 +369,15 @@ class TestValidateCpuAllocation:
 
     def test_valid_cpu_allocation_passes(self):
         cfg = {"cpu_allocation": {"cores_per_server": 4, "cores_per_client": 4}}
-        validate_cpu_allocation(cfg)  # should not raise
+        validate_cpu_allocation(cfg)
 
     def test_old_style_with_both_ranges_calls_validation(self):
         cfg = {"server_cpu_range": "0", "client_cpu_range": "1"}
-        validate_cpu_allocation(cfg)  # should not raise
+        validate_cpu_allocation(cfg)
 
     def test_old_style_with_only_server_range(self):
         cfg = {"server_cpu_range": "0-3"}
-        validate_cpu_allocation(cfg)  # should not raise
+        validate_cpu_allocation(cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -305,10 +386,8 @@ class TestValidateCpuAllocation:
 
 
 class TestValidatePositiveIntOrList:
-    """Tests for _validate_positive_int_or_list helper."""
-
     def test_valid_int(self):
-        _validate_positive_int_or_list(5, "test")  # should not raise
+        _validate_positive_int_or_list(5, "test")
 
     def test_zero_int_raises(self):
         with pytest.raises(ValueError, match="must be positive"):
@@ -319,7 +398,7 @@ class TestValidatePositiveIntOrList:
             _validate_positive_int_or_list(-3, "test")
 
     def test_valid_list(self):
-        _validate_positive_int_or_list([1, 2, 3], "test")  # should not raise
+        _validate_positive_int_or_list([1, 2, 3], "test")
 
     def test_list_with_zero_raises(self):
         with pytest.raises(ValueError, match="must be list of positive integers"):
@@ -348,10 +427,8 @@ class TestValidatePositiveIntOrList:
 
 
 class TestValidateTestGroups:
-    """Tests for validate_test_groups."""
-
     def test_no_test_groups_key_passes(self):
-        validate_test_groups({})  # should not raise
+        validate_test_groups({})
 
     def test_not_a_list_raises(self):
         with pytest.raises(ValueError, match="must be a non-empty list"):
@@ -379,7 +456,7 @@ class TestValidateTestGroups:
 
     def test_valid_test_groups_passes(self):
         cfg = {"test_groups": [{"scenarios": [{"id": "s1", "command": "GET key"}]}]}
-        validate_test_groups(cfg)  # should not raise
+        validate_test_groups(cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -388,8 +465,6 @@ class TestValidateTestGroups:
 
 
 class TestGetActivePorts:
-    """Tests for _get_active_ports."""
-
     def test_cluster_mode_with_cluster_ports(self):
         cfg = {"cluster_mode": True, "cluster_ports": [7000, 7001, 7002]}
         assert _get_active_ports(cfg) == [7000, 7001, 7002]
@@ -403,8 +478,7 @@ class TestGetActivePorts:
         assert _get_active_ports(cfg) == [6379]
 
     def test_no_port_key_defaults_to_6379(self):
-        cfg = {}
-        assert _get_active_ports(cfg) == [6379]
+        assert _get_active_ports({}) == [6379]
 
     def test_cluster_mode_without_cluster_ports_falls_back(self):
         cfg = {"cluster_mode": True, "port": 6380}

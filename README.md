@@ -235,6 +235,43 @@ python benchmark.py --valkey-benchmark-path /usr/local/bin/valkey-benchmark
 
 # Example: Use with custom Valkey path
 python benchmark.py --valkey-path /custom/valkey --valkey-benchmark-path /custom/valkey/src/valkey-benchmark
+````
+
+### Alternative Benchmark Tool: cachecannon
+
+[cachecannon](https://github.com/cachecannon/cachecannon) can be used as an alternative benchmark tool for GET and SET workloads. It provides io_uring-based I/O, CPU pinning, and detailed latency histograms.
+
+cachecannon is only used for GET and SET commands. All other commands automatically fall back to valkey-benchmark.
+
+#### Prerequisites
+
+Install cachecannon:
+
+```bash
+curl -fsSL https://cachecannon.cc/install.sh | bash
+```
+
+Or build from source (requires Rust 1.76+ and Linux 6.0+):
+
+```bash
+git clone https://github.com/cachecannon/cachecannon.git
+cd cachecannon && cargo build --release
+```
+
+#### Usage
+
+```bash
+# Use cachecannon for GET/SET, valkey-benchmark for everything else
+python benchmark.py --benchmark-tool cachecannon
+
+# Specify a custom cachecannon binary path
+python benchmark.py --benchmark-tool cachecannon --cachecannon-path /usr/local/bin/cachecannon
+
+# Combine with other options
+python benchmark.py --benchmark-tool cachecannon --valkey-path /path/to/valkey --config configs/benchmark-configs.json
+```
+
+The framework automatically generates a TOML configuration for cachecannon from your JSON benchmark config, runs the benchmark, and parses the results into the same metrics format used by valkey-benchmark. Metrics output includes a `benchmark_tool` field indicating which tool produced the result.
 
 ## Configuration
 
