@@ -373,13 +373,13 @@ class TestCachecannonTool:
             cluster_mode=False,
             tls_mode=False,
             valkey_path=Path("/tmp/valkey"),
-            tool_config={"timeout": 600},
+            tool_config={"threads": 4},
         )
         mock_runner.return_value = None
         tool = CachecannonTool()
         tool.run({"command": "SET"}, ctx)
         _, kwargs = mock_runner.call_args
-        assert kwargs.get("timeout") == 600
+        assert kwargs.get("cachecannon_config") == {"threads": 4}
 
     @patch("runners.cachecannon_tool.run_cachecannon")
     def test_passes_command_ratio(self, mock_runner, run_context):

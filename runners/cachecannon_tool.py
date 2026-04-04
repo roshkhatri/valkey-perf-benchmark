@@ -48,7 +48,8 @@ class CachecannonTool(BenchmarkTool):
             threads=scenario.get("threads"),
             cpu_list=context.cores,
             cachecannon_path=self._binary_path,
-            **(context.tool_config or {}),
+            cachecannon_config=context.tool_config,
+            command_ratio=scenario.get("command_ratio"),
         )
         if row is None:
             return None
