@@ -93,7 +93,12 @@ class ValkeyBenchmarkTool(BenchmarkTool):
             cmd += ["-n", str(requests)]
 
         # Standard params
-        for flag, key in (("-d", "data_size"), ("-P", "pipeline"), ("-c", "clients")):
+        for flag, key in (
+            ("-d", "data_size"),
+            ("-P", "pipeline"),
+            ("-c", "clients"),
+            ("-r", "keyspacelen"),
+        ):
             val = scenario.get(key)
             if val is not None:
                 cmd += [flag, str(val)]
@@ -101,14 +106,23 @@ class ValkeyBenchmarkTool(BenchmarkTool):
         if self._benchmark_threads is not None:
             cmd += ["--threads", str(self._benchmark_threads)]
 
-        # Command: builtin via -t, custom via --
+        warmup = scenario.get("warmup")
+        if warmup is not None and warmup > 0:
+            cmd += ["--warmup", str(warmup)]
+
+        seed = scenario.get("seed")
+        if seed is not None:
+            cmd += ["--seed", str(seed)]
+
+        cmd.append("--csv")
+
+        # Command: builtin single-word via -t, custom/multi-word via --
         command = scenario.get("command", "")
-        if command.upper() in _ALL_COMMANDS:
+        if command.upper() in _ALL_COMMANDS and " " not in command:
             cmd += ["-t", command]
         else:
             cmd += ["--", command]
 
-        cmd.append("--csv")
         return cmd
 
     @staticmethod

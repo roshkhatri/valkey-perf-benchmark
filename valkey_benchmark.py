@@ -726,6 +726,13 @@ class ClientRunner:
 
             selected_tool = self._select_tool(scenario)
 
+            # Inject a random seed if not explicitly disabled
+            if (
+                scenario.get("seed") is not False
+                and self.config.get("seed") is not False
+            ):
+                scenario = {**scenario, "seed": random.randint(0, 1000000)}
+
             if self._should_use_parallel(scenario):
                 logging.info(f"Using parallel execution for scenario {scenario_id}")
                 aggregated_row = self._run_parallel_search(
