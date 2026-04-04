@@ -35,6 +35,12 @@ This directory contains integration tests that validate benchmark workflows with
 - GitHub-compatible markdown output
 - Module benchmark workflow
 
+### End-to-End Combinations (`test_end_to_end_combinations.py`)
+- **TestConfigToScenariosEndToEnd** (7 tests) — Loads all 5 real config files from `configs/` and verifies the full JSON → validate → matrix expand pipeline produces correct scenario counts and preserves fields (top-level fields, `auto_populate`, cluster/TLS flags)
+- **TestToolSelectionEndToEnd** (6 tests) — Verifies tool registry contents, command support for `valkey-benchmark` and `cachecannon`, `_select_tool` primary/fallback behavior, and `command_ratio` validation
+- **TestBenchmarkResultToMetricsEndToEnd** (3 tests) — Tests BenchmarkResult → MetricsProcessor → metrics dict flow, extra latency merging (e.g. `p999`), and backward-compatible schema expected by `push_to_postgres`
+- **TestMixedConfigCombinations** (6 tests) — Validates configs combining matrix + cachecannon + `server_startup_config` + `command_ratio`, and verifies matrix expansion preserves scenario fields like `command_ratio` and `auto_populate`
+
 ## Running Tests
 
 ```bash
@@ -91,6 +97,7 @@ Key fixtures in `conftest.py`:
 2. **For git operations**: Add to `test_git_operations.py`
 3. **For comparison logic**: Add to `test_comparison_workflow.py`
 4. **For benchmark execution**: Add to `test_benchmark_execution.py`
+5. **For end-to-end pipeline combinations**: Add to `test_end_to_end_combinations.py`
 
 ### Example: Testing a New Comparison Feature
 
