@@ -30,9 +30,7 @@ class CachecannonTool(BenchmarkTool):
     def supports_command_ratio(self) -> bool:
         return True
 
-    def run(
-        self, scenario: dict, context: RunContext
-    ) -> Optional[BenchmarkResult]:
+    def run(self, scenario: dict, context: RunContext) -> Optional[BenchmarkResult]:
         """Execute cachecannon and return parsed result or None."""
         row = run_cachecannon(
             target_ip=context.target_ip,

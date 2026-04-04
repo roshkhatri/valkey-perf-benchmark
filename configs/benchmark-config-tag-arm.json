@@ -10,8 +10,8 @@
   "test_groups": [
     {
       "matrix": {
-        "data_sizes": [16, 512],
-        "pipelines": [1, 10],
+        "data_size": [16, 512],
+        "pipeline": [1, 10],
         "clients": [1600],
         "keyspacelen": [3000000]
       },

@@ -668,6 +668,7 @@ class ClientRunner:
         profile_id = f"group{group_id}_{scenario_type}_{scenario_id}_{config_suffix}"
 
         from runners.base import RunContext
+
         context = RunContext(
             target_ip=self.target_ip,
             port=self.config.get("port", DEFAULT_PORT),

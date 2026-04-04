@@ -107,7 +107,12 @@ def _build_toml_config(
     ]
 
     # Prefill for GET-only workloads so the keyspace is populated
-    prefill = "true" if (command_ratio and get_pct > 0) or (not command_ratio and command.upper() == "GET") else "false"
+    prefill = (
+        "true"
+        if (command_ratio and get_pct > 0)
+        or (not command_ratio and command.upper() == "GET")
+        else "false"
+    )
     lines += [
         "",
         "[workload]",
@@ -270,7 +275,9 @@ def run_cachecannon(
         )
 
         if result.returncode != 0:
-            logging.error(f"cachecannon failed (exit {result.returncode}): {result.stderr}")
+            logging.error(
+                f"cachecannon failed (exit {result.returncode}): {result.stderr}"
+            )
             return None
 
         logging.info(f"cachecannon output:\n{result.stdout}")

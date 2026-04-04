@@ -226,11 +226,19 @@ class TestRunCachecannon:
     @patch("cachecannon_runner.subprocess.run")
     def test_successful_run(self, mock_run):
         result_json = json.dumps(
-            {"type": "result", "throughput": 500000, "latency": {"avg": 50000, "min": 10000, "p50": 45000, "p99": 150000, "max": 1000000}}
+            {
+                "type": "result",
+                "throughput": 500000,
+                "latency": {
+                    "avg": 50000,
+                    "min": 10000,
+                    "p50": 45000,
+                    "p99": 150000,
+                    "max": 1000000,
+                },
+            }
         )
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout=result_json, stderr=""
-        )
+        mock_run.return_value = MagicMock(returncode=0, stdout=result_json, stderr="")
 
         result = run_cachecannon(command="SET", data_size=64)
         assert result is not None
@@ -239,9 +247,7 @@ class TestRunCachecannon:
 
     @patch("cachecannon_runner.subprocess.run")
     def test_nonzero_exit_returns_none(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=1, stdout="", stderr="error"
-        )
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
         assert run_cachecannon(command="GET") is None
 
     @patch("cachecannon_runner.subprocess.run")
@@ -399,9 +405,7 @@ class TestRunCachecannonNewParams:
         result_json = json.dumps(
             {"type": "result", "throughput": 500000, "latency": {"avg": 50000}}
         )
-        mock_run.return_value = MagicMock(
-            returncode=0, stdout=result_json, stderr=""
-        )
+        mock_run.return_value = MagicMock(returncode=0, stdout=result_json, stderr="")
         result = run_cachecannon(command="GET")
         assert result is not None
         assert float(result["rps"]) == 500000
@@ -411,11 +415,13 @@ class TestP95Fix:
     """Test that p95 maps to p95, not p99."""
 
     def test_p95_maps_to_p95(self):
-        output = json.dumps({
-            "type": "result",
-            "throughput": 1000,
-            "latency": {"p95": 95000, "p99": 99000},
-        })
+        output = json.dumps(
+            {
+                "type": "result",
+                "throughput": 1000,
+                "latency": {"p95": 95000, "p99": 99000},
+            }
+        )
         result = _parse_json_output(output, "GET")
         assert float(result["p95_latency_ms"]) == 0.095
         assert float(result["p99_latency_ms"]) == 0.099

@@ -284,7 +284,9 @@ def expand_matrix(test_group: dict) -> dict:
             for k, v in zip(keys, combo):
                 if k not in scenario:
                     new[k] = v
-                suffix_parts.append(f"{_MATRIX_KEY_PREFIX.get(k, k[0])}{scenario.get(k, v)}")
+                suffix_parts.append(
+                    f"{_MATRIX_KEY_PREFIX.get(k, k[0])}{scenario.get(k, v)}"
+                )
             base_id = scenario.get("id", "scenario")
             new["id"] = f"{base_id}_{'_'.join(suffix_parts)}"
             expanded.append(new)
@@ -300,7 +302,9 @@ def _validate_matrix(matrix: object, prefix: str) -> None:
         raise ValueError(f"'{prefix}' must be a dict")
     for key, val in matrix.items():
         if key not in ALLOWED_MATRIX_KEYS:
-            raise ValueError(f"'{prefix}' unknown key '{key}'. Allowed: {sorted(ALLOWED_MATRIX_KEYS)}")
+            raise ValueError(
+                f"'{prefix}' unknown key '{key}'. Allowed: {sorted(ALLOWED_MATRIX_KEYS)}"
+            )
         if not isinstance(val, list):
             raise ValueError(f"'{prefix}.{key}' must be a list")
         if len(val) == 0:
@@ -361,7 +365,11 @@ def validate_config(cfg: dict) -> None:
         for j, scenario in enumerate(group["scenarios"]):
             prefix = f"test_groups[{i}].scenarios[{j}]"
 
-            if "command" not in scenario or not isinstance(scenario["command"], str) or not scenario["command"].strip():
+            if (
+                "command" not in scenario
+                or not isinstance(scenario["command"], str)
+                or not scenario["command"].strip()
+            ):
                 raise ValueError(f"{prefix} must have a non-empty 'command' string")
 
             has_requests = "requests" in scenario and scenario["requests"] is not None
@@ -374,7 +382,9 @@ def validate_config(cfg: dict) -> None:
                     raise ValueError(f"{prefix}.clients must be a positive integer")
 
             if "command_ratio" in scenario:
-                _validate_command_ratio(scenario["command_ratio"], f"{prefix}.command_ratio")
+                _validate_command_ratio(
+                    scenario["command_ratio"], f"{prefix}.command_ratio"
+                )
 
     # Validate top-level optional sections
     if "cachecannon" in cfg:
@@ -712,7 +722,14 @@ def _execute_benchmark_run(
             repository=args.repository,
             tool=create_tool(
                 args.benchmark_tool,
-                **({"binary_path": args.cachecannon_path} if args.benchmark_tool == "cachecannon" else {"benchmark_path": benchmark_path, "benchmark_threads": cfg.get("benchmark-threads")}),
+                **(
+                    {"binary_path": args.cachecannon_path}
+                    if args.benchmark_tool == "cachecannon"
+                    else {
+                        "benchmark_path": benchmark_path,
+                        "benchmark_threads": cfg.get("benchmark-threads"),
+                    }
+                ),
             ),
             fallback_tool=create_tool(
                 "valkey-benchmark",

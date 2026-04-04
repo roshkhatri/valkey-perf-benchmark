@@ -77,7 +77,9 @@ class TestOverrideAndFields:
     def test_expansion_preserves_all_scenario_fields(self):
         """All original scenario fields are preserved in expanded scenarios."""
         group = {
-            "scenarios": [{"id": "set", "command": "SET foo bar", "type": "write", "warmup": 5}],
+            "scenarios": [
+                {"id": "set", "command": "SET foo bar", "type": "write", "warmup": 5}
+            ],
             "matrix": {"data_size": [16]},
         }
         result = expand_matrix(group)

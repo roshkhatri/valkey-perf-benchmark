@@ -91,9 +91,7 @@ class BenchmarkTool(ABC):
         """Return True if this tool supports mixed read/write ratios."""
 
     @abstractmethod
-    def run(
-        self, scenario: dict, context: RunContext
-    ) -> Optional[BenchmarkResult]:
+    def run(self, scenario: dict, context: RunContext) -> Optional[BenchmarkResult]:
         """Execute a benchmark scenario. Return None on failure."""
 
 

@@ -21,14 +21,13 @@ from benchmark import (
 
 # --- Helpers -----------------------------------------------------------------
 
+
 def _make_config(**overrides) -> dict:
     """Build a minimal valid unified config, applying overrides."""
     cfg = {
         "cluster_mode": False,
         "tls_mode": False,
-        "test_groups": [
-            {"scenarios": [{"id": "s1", "command": "SET foo bar"}]}
-        ],
+        "test_groups": [{"scenarios": [{"id": "s1", "command": "SET foo bar"}]}],
     }
     cfg.update(overrides)
     return cfg
@@ -66,16 +65,18 @@ class TestValidateConfigScenarios:
             validate_config(cfg)
 
     def test_scenario_both_requests_and_duration_raises_valueerror(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key", "requests": 100, "duration": 10}]}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {"scenarios": [{"command": "GET key", "requests": 100, "duration": 10}]}
+            ]
+        )
         with pytest.raises(ValueError, match="cannot have both"):
             validate_config(cfg)
 
     def test_scenario_nonpositive_clients_raises_valueerror(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key", "clients": 0}]}
-        ])
+        cfg = _make_config(
+            test_groups=[{"scenarios": [{"command": "GET key", "clients": 0}]}]
+        )
         with pytest.raises(ValueError, match="clients must be a positive integer"):
             validate_config(cfg)
 
@@ -87,29 +88,40 @@ class TestValidateConfigScenarios:
 
 class TestValidateConfigMatrix:
     def test_matrix_valid_dict_passes(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key"}], "matrix": {"data_size": [64, 128], "clients": [10]}}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {
+                    "scenarios": [{"command": "GET key"}],
+                    "matrix": {"data_size": [64, 128], "clients": [10]},
+                }
+            ]
+        )
         validate_config(cfg)  # should not raise
 
     def test_matrix_invalid_value_type_raises(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key"}], "matrix": {"data_size": 64}}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {"scenarios": [{"command": "GET key"}], "matrix": {"data_size": 64}}
+            ]
+        )
         with pytest.raises(ValueError, match="must be a list"):
             validate_config(cfg)
 
     def test_matrix_invalid_key_raises(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key"}], "matrix": {"bad_key": [1]}}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {"scenarios": [{"command": "GET key"}], "matrix": {"bad_key": [1]}}
+            ]
+        )
         with pytest.raises(ValueError, match="unknown key"):
             validate_config(cfg)
 
     def test_matrix_empty_list_raises(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key"}], "matrix": {"data_size": []}}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {"scenarios": [{"command": "GET key"}], "matrix": {"data_size": []}}
+            ]
+        )
         with pytest.raises(ValueError, match="must not be empty"):
             validate_config(cfg)
 
@@ -137,29 +149,52 @@ class TestValidateConfigCachecannon:
 
 class TestValidateConfigCommandRatio:
     def test_command_ratio_valid_passes(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key", "command_ratio": {"GET": 70, "SET": 30}}]}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {
+                    "scenarios": [
+                        {"command": "GET key", "command_ratio": {"GET": 70, "SET": 30}}
+                    ]
+                }
+            ]
+        )
         validate_config(cfg)  # should not raise
 
     def test_command_ratio_not_summing_to_100_raises(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key", "command_ratio": {"GET": 50, "SET": 40}}]}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {
+                    "scenarios": [
+                        {"command": "GET key", "command_ratio": {"GET": 50, "SET": 40}}
+                    ]
+                }
+            ]
+        )
         with pytest.raises(ValueError, match="sum to 100"):
             validate_config(cfg)
 
     def test_command_ratio_empty_key_raises(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key", "command_ratio": {"": 100}}]}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {"scenarios": [{"command": "GET key", "command_ratio": {"": 100}}]}
+            ]
+        )
         with pytest.raises(ValueError, match="non-empty strings"):
             validate_config(cfg)
 
     def test_command_ratio_negative_value_raises(self):
-        cfg = _make_config(test_groups=[
-            {"scenarios": [{"command": "GET key", "command_ratio": {"GET": -10, "SET": 110}}]}
-        ])
+        cfg = _make_config(
+            test_groups=[
+                {
+                    "scenarios": [
+                        {
+                            "command": "GET key",
+                            "command_ratio": {"GET": -10, "SET": 110},
+                        }
+                    ]
+                }
+            ]
+        )
         with pytest.raises(ValueError, match="positive integers"):
             validate_config(cfg)
 
@@ -195,12 +230,18 @@ class TestValidateConfigValid:
             port=6379,
             cachecannon={"threads": 2},
             server_startup_config={"maxmemory": "1gb"},
-            test_groups=[{
-                "scenarios": [
-                    {"command": "SET foo bar", "clients": 50, "command_ratio": {"SET": 100}},
-                ],
-                "matrix": {"data_size": [64], "pipeline": [1]},
-            }],
+            test_groups=[
+                {
+                    "scenarios": [
+                        {
+                            "command": "SET foo bar",
+                            "clients": 50,
+                            "command_ratio": {"SET": 100},
+                        },
+                    ],
+                    "matrix": {"data_size": [64], "pipeline": [1]},
+                }
+            ],
         )
         validate_config(cfg)  # should not raise
 

@@ -38,9 +38,7 @@ class ValkeyBenchmarkTool(BenchmarkTool):
     def supports_command_ratio(self) -> bool:
         return False
 
-    def run(
-        self, scenario: dict, context: RunContext
-    ) -> Optional[BenchmarkResult]:
+    def run(self, scenario: dict, context: RunContext) -> Optional[BenchmarkResult]:
         """Build command, execute, parse CSV, return result or None."""
         cmd = self._build_command(scenario, context)
         try:
@@ -62,9 +60,7 @@ class ValkeyBenchmarkTool(BenchmarkTool):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _build_command(
-        self, scenario: dict, context: RunContext
-    ) -> List[str]:
+    def _build_command(self, scenario: dict, context: RunContext) -> List[str]:
         """Assemble the valkey-benchmark CLI invocation."""
         cmd: List[str] = []
 
@@ -78,9 +74,12 @@ class ValkeyBenchmarkTool(BenchmarkTool):
         if context.tls_mode:
             cmd += [
                 "--tls",
-                "--cert", "./tests/tls/valkey.crt",
-                "--key", "./tests/tls/valkey.key",
-                "--cacert", "./tests/tls/ca.crt",
+                "--cert",
+                "./tests/tls/valkey.crt",
+                "--key",
+                "./tests/tls/valkey.key",
+                "--cacert",
+                "./tests/tls/ca.crt",
             ]
 
         cmd += ["-h", context.target_ip, "-p", str(context.port)]

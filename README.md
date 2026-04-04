@@ -64,9 +64,11 @@ valkey-perf-benchmark/
 │   ├── basic.yml            # Basic validation tests
 │   ├── check_format.yml     # Code formatting checks
 │   └── cluster_tls.yml      # Cluster and TLS specific tests
-├── configs/                  # Benchmark configuration files
+├── configs/                  # Benchmark configuration files (test_groups format)
 │   ├── benchmark-configs.json
-│   └── benchmark-configs-cluster-tls.json
+│   ├── benchmark-configs-cluster-tls.json
+│   ├── benchmark-config-arm.json
+│   └── benchmark-config-tag-arm.json
 ├── dashboards/              # Grafana dashboards and AWS infrastructure
 │   ├── grafana/            # Grafana dashboard definitions and Helm config
 │   ├── kubernetes/         # Kubernetes manifests (ALB Ingress)
@@ -81,6 +83,12 @@ valkey-perf-benchmark/
 ├── valkey_build.py          # Handles building Valkey from source
 ├── valkey_server.py         # Manages Valkey server instances
 ├── valkey_benchmark.py      # Runs benchmark tests
+├── cachecannon_runner.py    # Cachecannon benchmark integration
+├── runners/                 # Pluggable benchmark tool abstraction
+│   ├── __init__.py         # Public API and tool registration imports
+│   ├── base.py             # BenchmarkTool ABC, RunContext, BenchmarkResult, registry
+│   ├── valkey_benchmark_tool.py  # valkey-benchmark tool implementation
+│   └── cachecannon_tool.py      # cachecannon tool implementation
 ├── search_benchmark.py      # Search module benchmark execution (FTS, vector, numeric, tag)
 ├── profiler.py              # Generic performance profiler (flamegraphs)
 ├── cpu_monitor.py           # Generic CPU monitoring
@@ -266,51 +274,131 @@ python benchmark.py --benchmark-tool cachecannon
 
 # Specify a custom cachecannon binary path
 python benchmark.py --benchmark-tool cachecannon --cachecannon-path /usr/local/bin/cachecannon
-
-# Combine with other options
-python benchmark.py --benchmark-tool cachecannon --valkey-path /path/to/valkey --config configs/benchmark-configs.json
 ```
 
-The framework automatically generates a TOML configuration for cachecannon from your JSON benchmark config, runs the benchmark, and parses the results into the same metrics format used by valkey-benchmark. Metrics output includes a `benchmark_tool` field indicating which tool produced the result.
+#### Config-File Tuning
+
+Use the top-level `cachecannon` section to tune cachecannon-specific parameters:
+
+```json
+{
+  "cachecannon": {
+    "threads": 4,
+    "cpu_list": "8-11",
+    "connect_timeout": 5000,
+    "request_timeout": 10000
+  }
+}
+```
+
+#### Mixed Workloads with `command_ratio`
+
+cachecannon supports mixed read/write workloads via `command_ratio` on scenarios. Values must be positive integers summing to 100:
+
+```json
+{
+  "id": "mixed_80_20",
+  "type": "read",
+  "command": "GET",
+  "command_ratio": {"GET": 80, "SET": 20},
+  "clients": 50,
+  "pipeline": 10
+}
+```
+
+> `command_ratio` is only supported by cachecannon. valkey-benchmark does not support mixed workloads.
+
+#### Pluggable Tool Architecture
+
+Benchmark tools are implemented as plugins in the `runners/` package using a registry pattern:
+
+- `runners/base.py` — `BenchmarkTool` ABC, `RunContext`, `BenchmarkResult`, `register_tool()`, `create_tool()`
+- `runners/valkey_benchmark_tool.py` — `@register_tool("valkey-benchmark")`
+- `runners/cachecannon_tool.py` — `@register_tool("cachecannon")`
+
+The framework automatically selects the appropriate tool per scenario based on command support. Metrics output includes a `benchmark_tool` field indicating which tool produced each result.
 
 ## Configuration
 
-Create benchmark configurations in JSON format. Each object represents a single set of options and configurations are **not** automatically cross-multiplied. Example:
+All benchmark configurations use the unified `test_groups` format. Each config is a JSON object (or array of objects) containing `test_groups` with scenarios. See [docs/config-schema.md](docs/config-schema.md) for the complete schema reference.
+
+> **Migration note:** The old commands-based format (`commands`, `data_sizes`, `pipelines` as top-level arrays) has been removed. All configs now use `test_groups` with explicit scenarios.
+
+### Simple Config Example
 
 ```json
-[
-  {
-    "requests": [10000000],
-    "keyspacelen": [10000000],
-    "data_sizes": [16, 64, 256],
-    "pipelines": [1, 10, 100],
-    "commands": ["SET", "GET"],
-    "cluster_mode": "yes",
-    "tls_mode": "yes",
-    "warmup": 10,
-    "io-threads": [1, 4, 8],
-    "server_cpu_range": "0-1",
-    "client_cpu_range": "2-3"
-  }
-]
-````
+{
+  "duration": 120,
+  "cluster_mode": false,
+  "tls_mode": false,
+  "warmup": 10,
+  "io-threads": [1, 4],
+  "server_cpu_range": "0-1",
+  "client_cpu_range": "2-3",
+  "test_groups": [
+    {
+      "scenarios": [
+        {"id": "set", "type": "write", "command": "SET", "clients": 50, "pipeline": 10, "keyspacelen": 10000000, "data_size": 16},
+        {"id": "get", "type": "read", "command": "GET", "clients": 50, "pipeline": 10, "keyspacelen": 10000000, "data_size": 16, "auto_populate": true, "populate_command": "SET"}
+      ]
+    }
+  ]
+}
+```
+
+### Matrix Config Example
+
+Use `matrix` on a test group to generate Cartesian product combinations automatically:
+
+```json
+{
+  "duration": 180,
+  "cluster_mode": false,
+  "tls_mode": false,
+  "warmup": 30,
+  "io-threads": [1, 9],
+  "server_cpu_range": "0-8",
+  "client_cpu_range": "96-191",
+  "test_groups": [
+    {
+      "matrix": {
+        "data_size": [16, 96, 2048],
+        "pipeline": [1, 10],
+        "clients": [1600],
+        "keyspacelen": [3000000]
+      },
+      "scenarios": [
+        {"id": "set", "type": "write", "command": "SET"},
+        {"id": "get", "type": "read", "command": "GET", "auto_populate": true, "populate_command": "SET"}
+      ]
+    }
+  ]
+}
+```
+
+This generates scenarios like `set_d16_p1_c1600_k3000000`, `set_d16_p10_c1600_k3000000`, etc.
 
 ### Configuration Parameters
 
-| Parameter          | Description                                                    | Data Type           | Multiple Values |
-| ------------------ | -------------------------------------------------------------- | ------------------- | --------------- |
-| `requests`         | Number of requests to perform                                  | Integer             | Yes             |
-| `keyspacelen`      | Key space size (number of distinct keys)                       | Integer             | Yes             |
-| `data_sizes`       | Size of data in bytes                                          | Integer             | Yes             |
-| `pipelines`        | Number of commands to pipeline                                 | Integer             | Yes             |
-| `clients`          | Number of concurrent client connections                        | Integer             | Yes             |
-| `commands`         | Valkey commands to benchmark                                   | String              | Yes             |
-| `cluster_mode`     | Whether to enable cluster mode                                 | String ("yes"/"no") | No              |
-| `tls_mode`         | Whether to enable TLS                                          | String ("yes"/"no") | No              |
-| `warmup`           | Warmup time in seconds before benchmarking                     | Integer             | No              |
-| `io-threads`       | Number of I/O threads for server                               | Integer             | Yes             |
-| `server_cpu_range` | CPU cores for server (e.g. "0-3", "0,2,4", or "144-191,48-95") | String              | No              |
-| `client_cpu_range` | CPU cores for client (e.g. "4-7", "1,3,5", or "0-3,8-11")      | String              | No              |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `test_groups` | `object[]` | Array of test group objects (required) |
+| `cluster_mode` | `bool \| bool[]` | Enable cluster mode; array for multi-mode |
+| `tls_mode` | `bool` | Enable TLS |
+| `warmup` | `int` | Warmup seconds before measurement |
+| `duration` | `int` | Test duration in seconds (top-level default) |
+| `requests` | `int[]` | Total requests per run (top-level default) |
+| `io-threads` | `int \| int[]` | Server I/O threads |
+| `benchmark-threads` | `int` | valkey-benchmark thread count |
+| `server_cpu_range` | `string` | CPU pinning for server (e.g., `"0-3"`) |
+| `client_cpu_range` | `string` | CPU pinning for client |
+| `port` | `int` | Server port (default: 6379) |
+| `cachecannon` | `object` | Cachecannon tool tuning (see below) |
+| `server_startup_config` | `object` | Server startup overrides (see below) |
+
+**Scenario fields:** `id`, `type`, `command`, `clients`, `pipeline`, `data_size`, `keyspacelen`, `duration`, `requests`, `warmup`, `auto_populate`, `populate_command`, `command_ratio`, `sequential`, `seed`, `options`.
+
+**Matrix keys:** `data_size`, `pipeline`, `clients`, `keyspacelen`. Scenario-level values override matrix values.
 
 When `warmup` is provided for read commands, the benchmark performs three stages:
 
@@ -318,11 +406,13 @@ When `warmup` is provided for read commands, the benchmark performs three stages
 2. A warmup run of the read command (without `--sequential`) for the specified duration.
 3. The main benchmark run of the read command.
 
-Supported commands:
+### Supported Commands
 
-```
-"SET", "GET", "RPUSH", "LPUSH", "LPOP", "SADD", "SPOP", "HSET", "GET", "MGET", "LRANGE", "SPOP", "ZPOPMIN"
-```
+**Write:** `SET`, `MSET`, `INCR`, `LPUSH`, `RPUSH`, `LPOP`, `RPOP`, `SADD`, `HSET`, `ZADD`, `XADD`, `SPOP`, `ZPOPMIN`
+
+**Read:** `GET`, `MGET`, `LRANGE`, `SISMEMBER`, `ZSCORE`, `ZRANGE`
+
+> **Note:** cachecannon supports `GET` and `SET` only. All other commands automatically use valkey-benchmark.
 
 ## Results
 
@@ -355,11 +445,17 @@ Sample metrics.json
     "p95_latency_ms": 1.159,
     "p99_latency_ms": 1.407,
     "max_latency_ms": 2.463,
+    "p90_latency_ms": 1.05,
+    "p999_latency_ms": 1.8,
+    "p9999_latency_ms": 2.1,
     "cluster_mode": false,
-    "tls": false
+    "tls": false,
+    "benchmark_tool": "valkey-benchmark"
   }
 ]
 ```
+
+Extended latency fields (`p90`, `p999`, `p9999`, `p1`, `p5`, `p10`) are included when the benchmark tool provides them (cachecannon populates `p90`, `p999`, `p9999`). The `benchmark_tool` field indicates which tool produced the result.
 
 ## Continuous Benchmarking & CI/CD
 
@@ -430,8 +526,10 @@ See `dashboards/README.md` for complete deployment guide and architecture detail
 
 ### Configuration Files
 
-- `configs/benchmark-configs.json`: Standard benchmark configurations
-- `configs/benchmark-configs-cluster-tls.json`: Specialized configurations for cluster and TLS testing
+- `configs/benchmark-configs.json`: Standard benchmark configurations (test_groups format)
+- `configs/benchmark-configs-cluster-tls.json`: Cluster and TLS testing (test_groups format)
+- `configs/benchmark-config-arm.json`: ARM configurations with matrix expansion
+- `configs/benchmark-config-tag-arm.json`: ARM tag configurations with matrix expansion
 
 ## Development
 
@@ -480,7 +578,37 @@ The integration tests (`tests/integration/`) validate benchmark workflows end-to
 
 ### Adding New Configurations
 
-Create new JSON configuration files in the `configs/` directory following the existing format. Each configuration object represents a benchmark scenario.
+Create new JSON configuration files in the `configs/` directory using the `test_groups` format. See [docs/config-schema.md](docs/config-schema.md) for the complete schema reference.
+
+### Adding a New Benchmark Tool
+
+1. Create `runners/my_tool.py`:
+   ```python
+   from runners.base import BenchmarkResult, BenchmarkTool, RunContext, register_tool
+
+   @register_tool("my-tool")
+   class MyTool(BenchmarkTool):
+       @property
+       def name(self) -> str:
+           return "my-tool"
+
+       def supports_command(self, command: str) -> bool:
+           return command.upper() in {"GET", "SET"}
+
+       def supports_command_ratio(self) -> bool:
+           return False
+
+       def run(self, scenario: dict, context: RunContext):
+           # Execute benchmark, return BenchmarkResult or None
+           ...
+   ```
+
+2. Register the import in `runners/__init__.py`:
+   ```python
+   import runners.my_tool  # noqa: F401
+   ```
+
+3. Use it: `python benchmark.py --benchmark-tool my-tool`
 
 ### Extending for New Modules
 

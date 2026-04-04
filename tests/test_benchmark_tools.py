@@ -24,6 +24,7 @@ from runners.cachecannon_tool import CachecannonTool
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def sample_result():
     """A BenchmarkResult with only core fields set."""
@@ -91,6 +92,7 @@ SAMPLE_CSV = (
 # BenchmarkResult
 # ===========================================================================
 
+
 class TestBenchmarkResult:
     """Tests for BenchmarkResult dataclass."""
 
@@ -104,8 +106,13 @@ class TestBenchmarkResult:
 
     def test_to_row_dict_keys(self, sample_result):
         expected = {
-            "rps", "avg_latency_ms", "min_latency_ms",
-            "p50_latency_ms", "p95_latency_ms", "p99_latency_ms", "max_latency_ms",
+            "rps",
+            "avg_latency_ms",
+            "min_latency_ms",
+            "p50_latency_ms",
+            "p95_latency_ms",
+            "p99_latency_ms",
+            "max_latency_ms",
         }
         assert set(sample_result.to_row_dict().keys()) == expected
 
@@ -132,6 +139,7 @@ class TestBenchmarkResult:
 # RunContext
 # ===========================================================================
 
+
 class TestRunContext:
     """Tests for RunContext frozen dataclass."""
 
@@ -154,6 +162,7 @@ class TestRunContext:
 # ===========================================================================
 # Registry
 # ===========================================================================
+
 
 class TestRegistry:
     """Tests for tool registry functions."""
@@ -205,6 +214,7 @@ class TestRegistry:
 # ===========================================================================
 # ValkeyBenchmarkTool
 # ===========================================================================
+
 
 class TestValkeyBenchmarkTool:
     """Tests for ValkeyBenchmarkTool."""
@@ -315,6 +325,7 @@ class TestValkeyBenchmarkTool:
 # ===========================================================================
 # CachecannonTool
 # ===========================================================================
+
 
 class TestCachecannonTool:
     """Tests for CachecannonTool."""
