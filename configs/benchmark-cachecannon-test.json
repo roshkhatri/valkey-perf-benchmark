@@ -1,0 +1,59 @@
+[
+  {
+    "test_groups": [
+      {
+        "group": 1,
+        "description": "Cachecannon GET/SET smoke test",
+        "scenarios": [
+          {
+            "id": "set",
+            "type": "write",
+            "command": "SET",
+            "data_size": 16,
+            "pipeline": 32,
+            "clients": 16,
+            "keyspacelen": 10000,
+            "duration": 3,
+            "warmup": 1
+          },
+          {
+            "id": "get",
+            "type": "read",
+            "command": "GET",
+            "auto_populate": true,
+            "populate_command": "SET",
+            "data_size": 16,
+            "pipeline": 32,
+            "clients": 16,
+            "keyspacelen": 10000,
+            "duration": 3,
+            "warmup": 1
+          }
+        ]
+      },
+      {
+        "group": 2,
+        "description": "Cachecannon mixed workload smoke test",
+        "scenarios": [
+          {
+            "id": "mixed_80_20",
+            "type": "mixed",
+            "command": "GET",
+            "command_ratio": {"GET": 80, "SET": 20},
+            "data_size": 16,
+            "pipeline": 32,
+            "clients": 16,
+            "keyspacelen": 10000,
+            "duration": 3,
+            "warmup": 1
+          }
+        ]
+      }
+    ],
+    "cluster_mode": false,
+    "tls_mode": false,
+    "cachecannon": {
+      "threads": 2
+    }
+  }
+]
