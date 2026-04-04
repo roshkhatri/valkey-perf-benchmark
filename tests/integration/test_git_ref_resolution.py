@@ -34,7 +34,7 @@ def repo_with_remote(tmp_path):
     base_sha = upstream.create_commit("base", files={"a.txt": "base"})
     upstream.create_branch("feature-x")
     feature_sha = upstream.create_commit("feature", files={"b.txt": "feature"})
-    upstream.checkout("master")
+    upstream.checkout("main")
     main_sha = upstream.create_commit("main-next", files={"c.txt": "next"})
 
     # Clone to bare
@@ -93,7 +93,7 @@ class TestResolveRefLocal:
         """Branch name resolves to its HEAD commit."""
         git_repo.create_branch("my-branch")
         sha = git_repo.create_commit("on branch", files={"f.txt": "y"})
-        git_repo.checkout("master")
+        git_repo.checkout("main")
 
         assert resolve_ref("my-branch", git_repo.path) == sha
 

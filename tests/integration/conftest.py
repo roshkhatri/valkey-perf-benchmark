@@ -90,7 +90,7 @@ class GitRepoFixture:
 
     def _init_repo(self):
         """Initialize git repository with initial commit."""
-        self._run_git("init")
+        self._run_git("init", "-b", "main")
         self._run_git("config", "user.email", "test@example.com")
         self._run_git("config", "user.name", "Test User")
         # Create initial file and commit
@@ -224,15 +224,33 @@ def mock_benchmark_binary(tmp_path) -> MockBenchmarkBinary:
 def minimal_benchmark_config() -> Dict:
     """Minimal benchmark configuration for fast tests."""
     return {
-        "requests": [10],
-        "keyspacelen": [100],
-        "data_sizes": [16],
-        "pipelines": [1],
-        "clients": [1],
-        "commands": ["GET", "SET"],
+        "test_groups": [
+            {
+                "group": 1,
+                "scenarios": [
+                    {
+                        "id": "get",
+                        "command": "GET",
+                        "data_size": 16,
+                        "pipeline": 1,
+                        "clients": 1,
+                        "keyspacelen": 100,
+                        "requests": 10,
+                    },
+                    {
+                        "id": "set",
+                        "command": "SET",
+                        "data_size": 16,
+                        "pipeline": 1,
+                        "clients": 1,
+                        "keyspacelen": 100,
+                        "requests": 10,
+                    },
+                ],
+            }
+        ],
         "cluster_mode": False,
         "tls_mode": False,
-        "warmup": 0,
     }
 
 

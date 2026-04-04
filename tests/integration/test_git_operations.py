@@ -52,15 +52,14 @@ class TestGitRepoFixture:
     def test_checkout(self, git_repo: GitRepoFixture):
         """Verify checkout works."""
         git_repo.create_branch("test-branch")
-        git_repo.checkout("master")
+        git_repo.checkout("main")
         result = subprocess.run(
             ["git", "branch", "--show-current"],
             cwd=git_repo.path,
             capture_output=True,
             text=True,
         )
-        # Could be master or main depending on git version
-        assert result.stdout.strip() in ("master", "main")
+        assert result.stdout.strip() == "main"
 
 
 class TestPRWorkflowGitOperations:

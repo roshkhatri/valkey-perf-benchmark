@@ -65,10 +65,18 @@ class TestBenchmarkConfigLoading:
     def test_load_minimal_config(self, minimal_config_file):
         configs = load_configs(str(minimal_config_file))
         assert len(configs) == 1
-        assert configs[0]["commands"] == ["GET", "SET"]
+        assert "test_groups" in configs[0]
+        commands = [
+            s["command"] for g in configs[0]["test_groups"] for s in g["scenarios"]
+        ]
+        assert commands == ["GET", "SET"]
 
     def test_config_validation_rejects_invalid(self, tmp_path):
-        config_path = _write_config(tmp_path, [{"commands": ["GET"]}], "invalid.json")
+        config_path = _write_config(
+            tmp_path,
+            [{"test_groups": [{"scenarios": [{"data_size": 16}]}]}],
+            "invalid.json",
+        )
         with pytest.raises(ValueError):
             load_configs(str(config_path))
 
@@ -77,21 +85,31 @@ class TestBenchmarkConfigLoading:
             tmp_path,
             [
                 {
-                    "keyspacelen": [100],
-                    "data_sizes": [16],
-                    "pipelines": [1],
-                    "clients": [1],
-                    "commands": ["GET"],
+                    "test_groups": [
+                        {
+                            "group": 1,
+                            "scenarios": [
+                                {
+                                    "id": "get-duration",
+                                    "command": "GET",
+                                    "data_size": 16,
+                                    "pipeline": 1,
+                                    "clients": 1,
+                                    "keyspacelen": 100,
+                                    "duration": 1,
+                                }
+                            ],
+                        }
+                    ],
                     "cluster_mode": False,
                     "tls_mode": False,
-                    "warmup": 0,
-                    "duration": 1,
                 }
             ],
             "duration.json",
         )
 
-        assert load_configs(str(config_path))[0]["duration"] == 1
+        cfg = load_configs(str(config_path))[0]
+        assert cfg["test_groups"][0]["scenarios"][0]["duration"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -255,15 +273,24 @@ class TestEndToEndWithMock:
             tmp_path,
             [
                 {
-                    "requests": [10],
-                    "keyspacelen": [100],
-                    "data_sizes": [16],
-                    "pipelines": [1],
-                    "clients": [1],
-                    "commands": ["SET"],
+                    "test_groups": [
+                        {
+                            "group": 1,
+                            "scenarios": [
+                                {
+                                    "id": "set",
+                                    "command": "SET",
+                                    "data_size": 16,
+                                    "pipeline": 1,
+                                    "clients": 1,
+                                    "keyspacelen": 100,
+                                    "requests": 10,
+                                }
+                            ],
+                        }
+                    ],
                     "cluster_mode": False,
                     "tls_mode": False,
-                    "warmup": 0,
                 }
             ],
         )
