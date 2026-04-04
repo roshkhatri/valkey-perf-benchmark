@@ -73,5 +73,4 @@ def minimal_client_runner(minimal_valid_config):
         results_dir=Path("/tmp/test_results"),
         valkey_path="/tmp/valkey",
         valkey_benchmark_path="src/valkey-benchmark",
-        uses_test_groups=True,
     )

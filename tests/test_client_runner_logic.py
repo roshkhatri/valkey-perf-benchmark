@@ -7,11 +7,7 @@ from valkey_benchmark import ClientRunner
 
 
 def _make_csv(rows):
-    """Build CSV stdout string from a list of metric dicts.
-
-    Each dict should contain keys like rps, avg_latency_ms, etc.
-    Returns a string with a header line and one data line per dict.
-    """
+    """Build CSV stdout string from a list of metric dicts."""
     header = '"test","rps","avg_latency_ms","min_latency_ms","p50_latency_ms","p95_latency_ms","p99_latency_ms","max_latency_ms"'
     lines = [header]
     for r in rows:
@@ -226,77 +222,6 @@ class TestShouldUseParallel:
         minimal_client_runner.cluster_mode = False
         scenario = {"cluster_execution": "parallel"}
         assert minimal_client_runner._should_use_parallel(scenario) is False
-
-
-# ---------------------------------------------------------------------------
-# _generate_combinations
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateCombinations:
-    """Tests for ClientRunner._generate_combinations (legacy commands format).
-
-    These tests use a local commands-format config because _generate_combinations
-    is a legacy method that will be removed in the consolidation phase.
-    """
-
-    @pytest.fixture
-    def commands_config(self):
-        return {
-            "keyspacelen": [1000],
-            "data_sizes": [64],
-            "pipelines": [1],
-            "clients": [50],
-            "commands": ["GET", "SET"],
-            "cluster_mode": False,
-            "tls_mode": False,
-            "warmup": 0,
-            "requests": [1000],
-        }
-
-    def _make_runner(self, config):
-        return ClientRunner(
-            commit_id="abc",
-            config=config,
-            cluster_mode=False,
-            tls_mode=False,
-            target_ip="127.0.0.1",
-            results_dir=Path("/tmp"),
-            valkey_path="/tmp/valkey",
-            valkey_benchmark_path="src/valkey-benchmark",
-        )
-
-    def test_default_config(self, commands_config):
-        runner = self._make_runner(commands_config)
-        combos = runner._generate_combinations()
-        assert len(combos) == 2  # 1*1*1*1*1*2*1*1
-
-    def test_cartesian_product_count(self, commands_config):
-        commands_config["data_sizes"] = [64, 128]
-        commands_config["pipelines"] = [1, 10]
-        runner = self._make_runner(commands_config)
-        combos = runner._generate_combinations()
-        assert len(combos) == 8
-
-    def test_tuple_structure(self, commands_config):
-        runner = self._make_runner(commands_config)
-        combos = runner._generate_combinations()
-        first = combos[0]
-        assert len(first) == 8
-        assert first[0] == 1000  # requests
-        assert first[1] == 1000  # keyspacelen
-        assert first[2] == 64  # data_size
-        assert first[3] == 1  # pipeline
-        assert first[4] == 50  # clients
-        assert first[5] in ("GET", "SET")
-        assert first[6] == 0  # warmup
-        assert first[7] is None  # duration
-
-    def test_no_requests_key(self, commands_config):
-        del commands_config["requests"]
-        runner = self._make_runner(commands_config)
-        combos = runner._generate_combinations()
-        assert combos[0][0] is None
 
 
 # ---------------------------------------------------------------------------

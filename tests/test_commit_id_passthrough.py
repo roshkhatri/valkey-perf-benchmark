@@ -47,12 +47,14 @@ def mock_args(tmp_path):
 class TestCommitIdPassthrough:
     """commit_id passed to _execute_benchmark_run must reach ClientRunner."""
 
+    @patch("benchmark.create_tool")
     @patch("benchmark.ClientRunner")
     def test_sha_commit_id_reaches_client_runner(
-        self, mock_runner_cls, exec_config, mock_args, tmp_path
+        self, mock_runner_cls, mock_create_tool, exec_config, mock_args, tmp_path
     ):
         mock_instance = MagicMock()
         mock_runner_cls.return_value = mock_instance
+        mock_create_tool.return_value = MagicMock()
 
         _execute_benchmark_run(
             exec_config=exec_config,
@@ -68,13 +70,15 @@ class TestCommitIdPassthrough:
         mock_runner_cls.assert_called_once()
         assert mock_runner_cls.call_args.kwargs["commit_id"] == "abc123def456"
 
+    @patch("benchmark.create_tool")
     @patch("benchmark.ClientRunner")
     def test_commit_id_is_not_head_when_sha_provided(
-        self, mock_runner_cls, exec_config, mock_args, tmp_path
+        self, mock_runner_cls, mock_create_tool, exec_config, mock_args, tmp_path
     ):
         """Ensure we never silently fall back to 'HEAD'."""
         mock_instance = MagicMock()
         mock_runner_cls.return_value = mock_instance
+        mock_create_tool.return_value = MagicMock()
 
         _execute_benchmark_run(
             exec_config=exec_config,

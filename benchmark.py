@@ -15,6 +15,7 @@ from valkey_build import ServerBuilder
 from valkey_server import ServerLauncher
 from valkey_benchmark import ClientRunner
 from benchmark_build import BenchmarkBuilder
+from runners import create_tool, available_tools, BenchmarkTool
 from utils.cpu_utils import (
     parse_core_range,
     calculate_server_cpu_ranges,
@@ -178,7 +179,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--benchmark-tool",
-        choices=["valkey-benchmark", "cachecannon"],
+        choices=available_tools(),
         default="valkey-benchmark",
         help="Benchmark tool to use. 'cachecannon' is only used for GET/SET commands; "
         "other commands automatically fall back to valkey-benchmark.",
@@ -708,10 +709,16 @@ def _execute_benchmark_run(
             runs=args.runs,
             server_launcher=launcher,
             architecture=architecture,
-            uses_test_groups=True,
             repository=args.repository,
-            benchmark_tool=args.benchmark_tool,
-            cachecannon_path=args.cachecannon_path,
+            tool=create_tool(
+                args.benchmark_tool,
+                **({"binary_path": args.cachecannon_path} if args.benchmark_tool == "cachecannon" else {"benchmark_path": benchmark_path, "benchmark_threads": cfg.get("benchmark-threads")}),
+            ),
+            fallback_tool=create_tool(
+                "valkey-benchmark",
+                benchmark_path=benchmark_path,
+                benchmark_threads=cfg.get("benchmark-threads"),
+            ),
         )
 
         runner.current_profiling_set = exec_config["profiling_set"]

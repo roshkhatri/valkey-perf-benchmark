@@ -1,5 +1,7 @@
 """Client-side benchmark execution logic."""
 
+from __future__ import annotations
+
 import copy
 import logging
 import random
@@ -8,9 +10,8 @@ import subprocess
 import time
 import csv
 from contextlib import contextmanager
-from itertools import product
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import TYPE_CHECKING, Iterable, List, Optional
 
 import valkey
 
@@ -18,7 +19,9 @@ from process_metrics import MetricsProcessor
 from valkey_server import ServerLauncher
 from profiler import PerformanceProfiler
 from utils.git_utils import resolve_ref, get_commit_timestamp
-from cachecannon_runner import supports_command as cachecannon_supports, run_cachecannon
+
+if TYPE_CHECKING:
+    from runners.base import BenchmarkTool
 
 # Constants
 VALKEY_BENCHMARK = "src/valkey-benchmark"
@@ -84,10 +87,9 @@ class ClientRunner:
         runs: int = 1,
         server_launcher: Optional[ServerLauncher] = None,
         architecture: Optional[str] = None,
-        uses_test_groups: bool = False,
         repository: Optional[str] = None,
-        benchmark_tool: str = "valkey-benchmark",
-        cachecannon_path: str = "cachecannon",
+        tool: Optional["BenchmarkTool"] = None,
+        fallback_tool: Optional["BenchmarkTool"] = None,
     ) -> None:
         self.commit_id = commit_id
         self.config = config
@@ -103,10 +105,9 @@ class ClientRunner:
         self.runs = runs
         self.server_launcher = server_launcher
         self.architecture = architecture
-        self.uses_test_groups = uses_test_groups
         self.repository = repository
-        self.benchmark_tool = benchmark_tool
-        self.cachecannon_path = cachecannon_path
+        self.tool = tool
+        self.fallback_tool = fallback_tool
         self.current_profiling_set = {"enabled": False}
         self.current_config_set = {}
         self.config_suffix = "default"
@@ -306,91 +307,58 @@ class ClientRunner:
         logging.info(f"Keyspace populated for {read_command} with {requests} keys")
 
     def run_benchmark_config(self) -> None:
-        """Orchestrate benchmark execution for both config formats."""
+        """Orchestrate benchmark execution."""
         commit_time = self.get_commit_time(self.commit_id)
 
-        # Setup profiling/metrics infrastructure
         (
             profiler,
             metrics_processor,
             profiling_enabled,
         ) = self._setup_profiling_and_metrics(self.current_profiling_set, commit_time)
 
-        # Execute all scenarios and collect results
         metric_json = []
         for scenario_data in self._iterate_scenarios():
-            result = self._execute_scenario(
-                scenario_data,
+            result = self._run_single_scenario(
+                scenario_data["scenario"],
+                scenario_data["group_id"],
                 profiler,
                 metrics_processor,
                 profiling_enabled,
                 commit_time,
+                scenario_data["config_set"],
+                scenario_data["config_suffix"],
             )
             if result:
                 metric_json.append(result)
 
-        # Finalize and write results
         self._finalize_metrics(metrics_processor, metric_json, profiling_enabled)
 
-    def _iterate_scenarios(self):
-        """Generate scenario execution data from either config format."""
-        if self.uses_test_groups:
-            yield from self._iterate_test_groups_scenarios()
-        else:
-            yield from self._iterate_simple_scenarios()
-
-    def _iterate_simple_scenarios(self):
-        """Generate scenarios from simple command-based configuration."""
-        for (
-            requests,
-            keyspacelen,
-            data_size,
-            pipeline,
-            clients,
-            command,
-            warmup,
-            duration,
-        ) in self._generate_combinations():
-            # Validate command
-            if command not in READ_COMMANDS + WRITE_COMMANDS:
-                logging.warning(f"Unsupported command: {command}, skipping.")
-                continue
-
-            if command in ["MSET", "MGET"] and self.cluster_mode:
-                logging.warning(
-                    f"Command {command} not supported in cluster mode, skipping."
+    def _select_tool(self, scenario: dict) -> BenchmarkTool:
+        """Select appropriate tool for scenario."""
+        if self.tool is None:
+            return self.fallback_tool
+        command = scenario.get("command", "")
+        if scenario.get("command_ratio"):
+            if not self.tool.supports_command_ratio():
+                raise ValueError(
+                    f"command_ratio requires a tool that supports mixed workloads, "
+                    f"{self.tool.name} does not"
                 )
-                continue
+            return self.tool
+        if self.tool.supports_command(command.split()[0].upper()):
+            return self.tool
+        if self.fallback_tool is not None:
+            return self.fallback_tool
+        return self.tool
 
-            # Run multiple times if requested
-            for run_num in range(self.runs):
-                seed_val = random.randint(0, 1000000)
-
-                yield {
-                    "format": "simple",
-                    "run_num": run_num,
-                    "requests": requests,
-                    "keyspacelen": keyspacelen,
-                    "data_size": data_size,
-                    "pipeline": pipeline,
-                    "clients": clients,
-                    "command": command,
-                    "warmup": warmup,
-                    "duration": duration,
-                    "seed": seed_val,
-                    "needs_population": command in READ_COMMANDS,
-                    "populate_command": READ_POPULATE_MAP.get(command),
-                }
-
-    def _iterate_test_groups_scenarios(self):
-        """Generate scenarios from test_groups configuration."""
+    def _iterate_scenarios(self):
+        """Generate scenario execution data from test_groups config."""
         groups_to_run = self.config.get("groups_to_run")
         scenario_filter = self.config.get("scenario_filter")
 
         for test_group in self.config.get("test_groups", []):
             group_id = test_group.get("group", "unknown")
 
-            # Skip filtered groups
             if groups_to_run and group_id not in groups_to_run:
                 logging.info(
                     f"Skipping group {group_id} (not in filter: {groups_to_run})"
@@ -402,9 +370,7 @@ class ClientRunner:
             )
 
             for scenario in test_group.get("scenarios", []):
-                # Expand scenario options (e.g., with/without flags)
                 for expanded_scenario in self._expand_scenario_options(scenario):
-                    # Skip filtered scenarios
                     if (
                         scenario_filter
                         and expanded_scenario.get("id") not in scenario_filter
@@ -415,191 +381,11 @@ class ClientRunner:
                         continue
 
                     yield {
-                        "format": "test_groups",
                         "scenario": expanded_scenario,
                         "group_id": group_id,
                         "config_set": self.current_config_set,
                         "config_suffix": self.config_suffix,
                     }
-
-    def _execute_scenario(
-        self, scenario_data, profiler, metrics_processor, profiling_enabled, commit_time
-    ):
-        """Execute a single scenario regardless of format."""
-        if scenario_data["format"] == "simple":
-            return self._execute_simple_scenario(scenario_data, metrics_processor)
-        else:
-            return self._execute_test_groups_scenario(
-                scenario_data,
-                profiler,
-                metrics_processor,
-                profiling_enabled,
-                commit_time,
-            )
-
-    def _execute_simple_scenario(self, data, metrics_processor):
-        """Execute a simple format scenario."""
-        if self.runs > 1:
-            logging.info(f"=== Run {data['run_num'] + 1}/{self.runs} ===")
-
-        mode_info = (
-            f"duration={data['duration']}s"
-            if data["duration"] is not None
-            else f"requests={data['requests']}"
-        )
-        logging.info(
-            f"--> Running {data['command']} | size={data['data_size']} | "
-            f"pipeline={data['pipeline']} | clients={data['clients']} | {mode_info} | "
-            f"keyspacelen={data['keyspacelen']} | warmup={data['warmup']}"
-        )
-        logging.info(f"Using seed value: {data['seed']}")
-
-        # Restart/flush
-        if self.server_launcher:
-            self._restart_server()
-        else:
-            self._flush_database()
-
-        # Populate if needed
-        if data["needs_population"]:
-            populate_requests = (
-                data["requests"]
-                if data["requests"] is not None
-                else data["keyspacelen"]
-            )
-            self._populate_keyspace(
-                data["command"],
-                populate_requests,
-                data["keyspacelen"],
-                data["data_size"],
-                data["pipeline"],
-                data["clients"],
-                data["seed"],
-            )
-
-        # Use cachecannon for supported commands when selected
-        if (
-            self.benchmark_tool == "cachecannon"
-            and cachecannon_supports(data["command"])
-        ):
-            logging.info(f"Using cachecannon for {data['command']}")
-            row = run_cachecannon(
-                target_ip=self.target_ip,
-                port=self.config.get("port", DEFAULT_PORT),
-                duration=data["duration"],
-                requests=data["requests"],
-                warmup=data["warmup"],
-                data_size=data["data_size"],
-                keyspacelen=data["keyspacelen"],
-                pipeline=data["pipeline"],
-                clients=data["clients"],
-                command=data["command"],
-                cluster_mode=self.cluster_mode,
-                tls_mode=self.tls_mode,
-                threads=self.benchmark_threads,
-                cpu_list=self.cores,
-                cachecannon_path=self.cachecannon_path,
-            )
-            if row and metrics_processor:
-                metrics = metrics_processor.create_metrics(
-                    row,
-                    data["command"],
-                    data["data_size"],
-                    data["pipeline"],
-                    data["clients"],
-                    data["requests"],
-                    data["warmup"],
-                    data["duration"],
-                )
-                if metrics:
-                    metrics["benchmark_tool"] = "cachecannon"
-                    return metrics
-            return None
-
-        # Run benchmark (valkey-benchmark)
-        bench_cmd = self._build_benchmark_command(
-            tls=self.tls_mode,
-            requests=data["requests"],
-            keyspacelen=data["keyspacelen"],
-            data_size=data["data_size"],
-            pipeline=data["pipeline"],
-            clients=data["clients"],
-            command=data["command"],
-            seed_val=data["seed"],
-            sequential=False,
-            duration=data["duration"],
-            warmup=data["warmup"],
-        )
-
-        proc = self._run(
-            bench_cmd, cwd=self.valkey_path, capture_output=True, timeout=None
-        )
-        if proc is None:
-            logging.error("Benchmark command failed to return results")
-            return None
-
-        logging.info(f"Benchmark output:\n{proc.stdout}")
-        if proc.stderr:
-            logging.warning(f"Benchmark stderr:\n{proc.stderr}")
-
-        # Parse metrics
-        try:
-            reader = csv.DictReader(proc.stdout.splitlines())
-            for row in reader:
-                test_name = row.get("test", "")
-                if not test_name.startswith(data["command"]):
-                    continue
-
-                metrics = metrics_processor.create_metrics(
-                    row,
-                    test_name,
-                    data["data_size"],
-                    data["pipeline"],
-                    data["clients"],
-                    data["requests"],
-                    data["warmup"],
-                    data["duration"],
-                )
-                if metrics:
-                    logging.info(f"Parsed metrics for {test_name}: {metrics}")
-                    return metrics
-        except Exception as e:
-            logging.error(f"Failed to parse benchmark results: {e}")
-
-        return None
-
-    def _execute_test_groups_scenario(
-        self, data, profiler, metrics_processor, profiling_enabled, commit_time
-    ):
-        """Execute a test_groups format scenario."""
-        return self._run_single_scenario(
-            data["scenario"],
-            data["group_id"],
-            profiler,
-            metrics_processor,
-            profiling_enabled,
-            commit_time,
-            data["config_set"],
-            data["config_suffix"],
-        )
-
-    def _generate_combinations(self) -> List[tuple]:
-        """Cartesian product of parameters within a single config item."""
-        # Use requests if available, otherwise None for duration mode
-        requests_list = self.config.get("requests", [None])
-
-        return list(
-            product(
-                requests_list,
-                self.config["keyspacelen"],
-                self.config["data_sizes"],
-                self.config["pipelines"],
-                self.config["clients"],
-                self.config["commands"],
-                [self.config["warmup"]],
-                [self.config.get("duration")],
-            )
-        )
 
     def _build_benchmark_command(
         self,
@@ -881,14 +667,32 @@ class ClientRunner:
         scenario_profiling_enabled = effective_profiling.get("enabled", False)
         profile_id = f"group{group_id}_{scenario_type}_{scenario_id}_{config_suffix}"
 
+        from runners.base import RunContext
+        context = RunContext(
+            target_ip=self.target_ip,
+            port=self.config.get("port", DEFAULT_PORT),
+            cluster_mode=self.cluster_mode,
+            tls_mode=self.tls_mode,
+            valkey_path=self.valkey_path,
+            cores=self.client_cpu_ranges[0] if self.client_cpu_ranges else self.cores,
+            tool_config=self.config.get("cachecannon"),
+        )
+
         warmup_duration = scenario.get("warmup", 0)
         try:
+            # Auto-populate for read commands
+            if scenario.get("auto_populate") and self.fallback_tool:
+                populate_cmd = scenario.get("populate_command", "SET")
+                pop_scenario = {**scenario, "command": populate_cmd, "type": "write"}
+                pop_scenario.pop("auto_populate", None)
+                pop_scenario.pop("populate_command", None)
+                self.fallback_tool.run(pop_scenario, context)
+
             if warmup_duration > 0:
                 if self._should_use_parallel(scenario):
                     logging.info(
                         f"Running parallel warmup on {len(self._get_active_ports())} nodes: {warmup_duration}s"
                     )
-                    # Warm up all nodes that will be queried
                     self._run_parallel_search(
                         scenario,
                         self._get_active_ports(),
@@ -914,18 +718,23 @@ class ClientRunner:
                         f"CME profiling: targeting node 0 on port {target_port}"
                     )
 
-                # Pass scenario delays override
                 profiler.delays = effective_profiling.get("delays", profiler.delays)
                 profiler.start_profiling(
                     profile_id, target_process="valkey-server", target_port=target_port
                 )
+
+            selected_tool = self._select_tool(scenario)
 
             if self._should_use_parallel(scenario):
                 logging.info(f"Using parallel execution for scenario {scenario_id}")
                 aggregated_row = self._run_parallel_search(
                     scenario, self._get_active_ports(), self.client_cpu_ranges
                 )
-                proc = None
+                row = aggregated_row
+                result = None
+            elif selected_tool is not None:
+                result = selected_tool.run(scenario, context)
+                row = result.to_row_dict() if result else None
             else:
                 cpu = self.client_cpu_ranges[0] if self.client_cpu_ranges else None
                 proc = self._run(
@@ -934,12 +743,13 @@ class ClientRunner:
                     capture_output=True,
                     timeout=None,
                 )
-                aggregated_row = None
+                row = self._parse_csv_row(proc.stdout if proc else "")
+                result = None
 
             if profiler and scenario_profiling_enabled:
                 profiler.stop_profiling(profile_id)
 
-            if proc is None and aggregated_row is None:
+            if row is None:
                 logging.error(f"Benchmark failed for scenario {scenario_id}")
                 if metrics_processor:
                     return self._create_failure_marker(
@@ -953,16 +763,8 @@ class ClientRunner:
                     )
                 return None
 
-            if proc:
-                logging.info(f"Benchmark output:\n{proc.stdout}")
-
             if metrics_processor:
                 requests_value = scenario.get("requests") or scenario.get("maxdocs")
-                row = aggregated_row or self._parse_csv_row(proc.stdout if proc else "")
-
-                if not row:
-                    logging.warning(f"No metrics data for scenario {scenario_id}")
-                    return None
 
                 metrics = metrics_processor.create_metrics(
                     row,
@@ -982,6 +784,10 @@ class ClientRunner:
                     metrics["config_set"] = config_set
                     if scenario.get("dataset"):
                         metrics["dataset"] = scenario["dataset"]
+                    if result:
+                        metrics.update(result.extra_latencies())
+                    if selected_tool:
+                        metrics["benchmark_tool"] = selected_tool.name
                     return metrics
 
         except Exception as e:
