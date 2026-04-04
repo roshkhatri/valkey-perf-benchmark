@@ -470,8 +470,19 @@ class ClientRunner:
             cmd += ["-c", str(scenario.get("clients", 1))]
             cmd += ["-P", str(scenario.get("pipeline", 1))]
 
-            keyspacelen_val = self.config.get("keyspacelen", [1000000])[0]
+            keyspacelen_val = scenario.get(
+                "keyspacelen",
+                (
+                    self.config.get("keyspacelen", [1000000])[0]
+                    if isinstance(self.config.get("keyspacelen"), list)
+                    else self.config.get("keyspacelen", 1000000)
+                ),
+            )
             cmd += ["-r", str(keyspacelen_val)]
+
+            data_size_val = scenario.get("data_size")
+            if data_size_val is not None:
+                cmd += ["-d", str(data_size_val)]
 
             if scenario.get("sequential", False):
                 cmd += ["--sequential"]
@@ -489,8 +500,17 @@ class ClientRunner:
                 cmd += ["--seed", str(seed)]
 
             cmd += ["--csv"]
-            cmd += ["--"]
-            cmd += shlex.split(scenario["command"])
+            # Use -t for single-word builtin commands, -- for custom/multi-word
+            cmd_str = scenario["command"]
+            cmd_upper = cmd_str.split()[0].upper() if cmd_str else ""
+            if (
+                cmd_upper in READ_COMMANDS + WRITE_COMMANDS
+                and " " not in cmd_str.strip()
+            ):
+                cmd += ["-t", cmd_str]
+            else:
+                cmd += ["--"]
+                cmd += shlex.split(cmd_str)
         else:
             # Simple format: use positional args
             if duration is not None:
