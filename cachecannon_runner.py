@@ -202,8 +202,11 @@ def _parse_json_output(stdout: str, command: str) -> Optional[Dict]:
         "avg_latency_ms": str(_ns_to_ms(latency.get("avg", 0))),
         "min_latency_ms": str(_ns_to_ms(latency.get("min", 0))),
         "p50_latency_ms": str(_ns_to_ms(latency.get("p50", 0))),
+        "p90_latency_ms": str(_ns_to_ms(latency.get("p90", 0))),
         "p95_latency_ms": str(_ns_to_ms(latency.get("p95", 0))),
         "p99_latency_ms": str(_ns_to_ms(latency.get("p99", 0))),
+        "p999_latency_ms": str(_ns_to_ms(latency.get("p999", 0))),
+        "p9999_latency_ms": str(_ns_to_ms(latency.get("p9999", 0))),
         "max_latency_ms": str(_ns_to_ms(latency.get("max", 0))),
     }
 
