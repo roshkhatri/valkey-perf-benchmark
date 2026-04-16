@@ -121,7 +121,7 @@ class TestBuildTomlConfig:
 
     def test_threads_optional(self):
         toml = _build_toml_config(**self._default_kwargs())
-        assert "threads" not in toml
+        assert "threads = 4" in toml  # defaults to 4 when not specified
 
     def test_threads_included(self):
         toml = _build_toml_config(**self._default_kwargs(threads=4))
@@ -380,7 +380,7 @@ class TestCachecannonConfigInToml:
 
     def test_cachecannon_config_none_uses_defaults(self):
         toml = _build_toml_config(**self._default_kwargs(cachecannon_config=None))
-        assert "threads" not in toml
+        assert "threads = 4" in toml  # defaults to 4
         assert "cpu_list" not in toml
         assert 'connect_timeout = "5s"' in toml
         assert 'request_timeout = "1s"' in toml

@@ -80,6 +80,10 @@ def _build_toml_config(
     ]
     if eff_threads:
         lines.append(f"threads = {eff_threads}")
+    else:
+        # Default to 4 threads; cachecannon defaults to all CPUs which
+        # can cause io_uring precheck failures on high-core-count machines.
+        lines.append("threads = 4")
     if eff_cpu_list:
         lines.append(f'cpu_list = "{eff_cpu_list}"')
 
@@ -138,13 +142,6 @@ def _build_toml_config(
         "",
         "[workload.values]",
         f"length = {data_size}",
-    ]
-
-    lines += [
-        "",
-        "[timestamps]",
-        "enabled = true",
-        'mode = "userspace"',
     ]
 
     lines += [
