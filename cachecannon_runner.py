@@ -161,6 +161,10 @@ def _parse_json_output(stdout: str, command: str) -> Optional[Dict]:
 
     Cachecannon emits one JSON object per line with a ``type`` field.
     We extract the final ``result`` line.
+
+    Cachecannon v0.0.11 outputs per-command latency objects (``get``, ``set``)
+    with fields ``p50_us``, ``p90_us``, ``p99_us``, ``p999_us``, ``p9999_us``,
+    ``max_us`` in **microseconds**.  It does not emit ``avg`` or ``min``.
     """
     result_line = None
     for line in stdout.strip().splitlines():
@@ -178,36 +182,37 @@ def _parse_json_output(stdout: str, command: str) -> Optional[Dict]:
         logging.warning("No 'result' line found in cachecannon JSON output")
         return None
 
-    def _ns_to_ms(ns_val):
-        """Convert nanoseconds to milliseconds."""
+    def _us_to_ms(us_val):
+        """Convert microseconds to milliseconds."""
         try:
-            return round(float(ns_val) / 1_000_000, 3)
+            return round(float(us_val) / 1_000, 3)
         except (TypeError, ValueError):
             return 0.0
 
-    # Map cachecannon result fields to our standard metrics dict.
-    # The exact field names depend on cachecannon's JSON schema;
-    # we handle both flat and nested latency structures.
     rps = float(result_line.get("throughput", 0))
 
-    # Latency may be nested under a per-command key or at top level
-    latency = result_line.get("latency", {})
+    # Cachecannon outputs per-command latency: "get" and "set" objects.
+    # Pick the latency object matching the command being benchmarked.
+    cmd_key = command.lower()
+    latency = result_line.get(cmd_key, {})
     if not latency:
-        # Try command-specific latency
-        cmd_key = command.lower() + "_latency"
-        latency = result_line.get(cmd_key, {})
+        # Fallback: try the other command or a top-level "latency" key
+        for key in ("get", "set", "latency"):
+            latency = result_line.get(key, {})
+            if latency:
+                break
 
     return {
         "rps": str(rps),
-        "avg_latency_ms": str(_ns_to_ms(latency.get("avg", 0))),
-        "min_latency_ms": str(_ns_to_ms(latency.get("min", 0))),
-        "p50_latency_ms": str(_ns_to_ms(latency.get("p50", 0))),
-        "p90_latency_ms": str(_ns_to_ms(latency.get("p90", 0))),
-        "p95_latency_ms": str(_ns_to_ms(latency.get("p95", 0))),
-        "p99_latency_ms": str(_ns_to_ms(latency.get("p99", 0))),
-        "p999_latency_ms": str(_ns_to_ms(latency.get("p999", 0))),
-        "p9999_latency_ms": str(_ns_to_ms(latency.get("p9999", 0))),
-        "max_latency_ms": str(_ns_to_ms(latency.get("max", 0))),
+        "avg_latency_ms": str(_us_to_ms(latency.get("p50_us", 0))),
+        "min_latency_ms": str(_us_to_ms(latency.get("p50_us", 0))),
+        "p50_latency_ms": str(_us_to_ms(latency.get("p50_us", 0))),
+        "p90_latency_ms": str(_us_to_ms(latency.get("p90_us", 0))),
+        "p95_latency_ms": str(_us_to_ms(latency.get("p99_us", 0))),
+        "p99_latency_ms": str(_us_to_ms(latency.get("p99_us", 0))),
+        "p999_latency_ms": str(_us_to_ms(latency.get("p999_us", 0))),
+        "p9999_latency_ms": str(_us_to_ms(latency.get("p9999_us", 0))),
+        "max_latency_ms": str(_us_to_ms(latency.get("max_us", 0))),
     }
 
 

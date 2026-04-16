@@ -153,7 +153,12 @@ class TestBuildTomlConfig:
 
 
 class TestParseJsonOutput:
-    """Tests for _parse_json_output()."""
+    """Tests for _parse_json_output().
+
+    Cachecannon v0.0.11 outputs per-command latency objects (``get``, ``set``)
+    with fields ``p50_us``, ``p90_us``, ``p99_us``, ``p999_us``, ``p9999_us``,
+    ``max_us`` in microseconds.
+    """
 
     def _make_ndjson(self, *objects):
         return "\n".join(json.dumps(o) for o in objects)
@@ -165,21 +170,31 @@ class TestParseJsonOutput:
             {
                 "type": "result",
                 "throughput": 530000,
-                "latency": {
-                    "avg": 47000,
-                    "min": 10000,
-                    "p50": 45000,
-                    "p99": 150000,
-                    "max": 1200000,
+                "get": {
+                    "count": 530000,
+                    "p50_us": 45,
+                    "p90_us": 89,
+                    "p99_us": 150,
+                    "p999_us": 312,
+                    "p9999_us": 891,
+                    "max_us": 1200,
+                },
+                "set": {
+                    "count": 0,
+                    "p50_us": 0,
+                    "p90_us": 0,
+                    "p99_us": 0,
+                    "p999_us": 0,
+                    "p9999_us": 0,
+                    "max_us": 0,
                 },
             },
         )
         result = _parse_json_output(output, "GET")
         assert result is not None
         assert float(result["rps"]) == 530000
-        assert float(result["avg_latency_ms"]) == 0.047
-        assert float(result["min_latency_ms"]) == 0.01
         assert float(result["p50_latency_ms"]) == 0.045
+        assert float(result["p90_latency_ms"]) == 0.089
         assert float(result["p99_latency_ms"]) == 0.15
         assert float(result["max_latency_ms"]) == 1.2
 
@@ -195,7 +210,7 @@ class TestParseJsonOutput:
 
     def test_malformed_json_lines_skipped(self):
         output = "not json\n" + json.dumps(
-            {"type": "result", "throughput": 100, "latency": {}}
+            {"type": "result", "throughput": 100, "get": {}, "set": {}}
         )
         result = _parse_json_output(output, "GET")
         assert result is not None
@@ -203,17 +218,46 @@ class TestParseJsonOutput:
 
     def test_uses_last_result_line(self):
         output = self._make_ndjson(
-            {"type": "result", "throughput": 100, "latency": {}},
-            {"type": "result", "throughput": 200, "latency": {}},
+            {"type": "result", "throughput": 100, "get": {}, "set": {}},
+            {"type": "result", "throughput": 200, "get": {}, "set": {}},
         )
         result = _parse_json_output(output, "GET")
         assert float(result["rps"]) == 200
 
     def test_missing_latency_fields_default_zero(self):
-        output = json.dumps({"type": "result", "throughput": 1000, "latency": {}})
+        output = json.dumps({"type": "result", "throughput": 1000, "set": {}})
         result = _parse_json_output(output, "SET")
         assert float(result["avg_latency_ms"]) == 0.0
         assert float(result["p50_latency_ms"]) == 0.0
+
+    def test_set_command_uses_set_latency(self):
+        output = json.dumps(
+            {
+                "type": "result",
+                "throughput": 1000,
+                "get": {
+                    "count": 0,
+                    "p50_us": 0,
+                    "p90_us": 0,
+                    "p99_us": 0,
+                    "p999_us": 0,
+                    "p9999_us": 0,
+                    "max_us": 0,
+                },
+                "set": {
+                    "count": 1000,
+                    "p50_us": 52,
+                    "p90_us": 95,
+                    "p99_us": 167,
+                    "p999_us": 334,
+                    "p9999_us": 500,
+                    "max_us": 800,
+                },
+            }
+        )
+        result = _parse_json_output(output, "SET")
+        assert float(result["p50_latency_ms"]) == 0.052
+        assert float(result["p99_latency_ms"]) == 0.167
 
 
 class TestRunCachecannon:
@@ -229,12 +273,23 @@ class TestRunCachecannon:
             {
                 "type": "result",
                 "throughput": 500000,
-                "latency": {
-                    "avg": 50000,
-                    "min": 10000,
-                    "p50": 45000,
-                    "p99": 150000,
-                    "max": 1000000,
+                "set": {
+                    "count": 500000,
+                    "p50_us": 45,
+                    "p90_us": 89,
+                    "p99_us": 150,
+                    "p999_us": 312,
+                    "p9999_us": 891,
+                    "max_us": 1000,
+                },
+                "get": {
+                    "count": 0,
+                    "p50_us": 0,
+                    "p90_us": 0,
+                    "p99_us": 0,
+                    "p999_us": 0,
+                    "p9999_us": 0,
+                    "max_us": 0,
                 },
             }
         )
@@ -386,7 +441,9 @@ class TestRunCachecannonNewParams:
     def test_run_cachecannon_passes_config_and_ratio(self, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps({"type": "result", "throughput": 100, "latency": {}}),
+            stdout=json.dumps(
+                {"type": "result", "throughput": 100, "get": {}, "set": {}}
+            ),
             stderr="",
         )
         run_cachecannon(
@@ -403,7 +460,28 @@ class TestRunCachecannonNewParams:
     @patch("cachecannon_runner.subprocess.run")
     def test_backward_compat_no_new_params(self, mock_run):
         result_json = json.dumps(
-            {"type": "result", "throughput": 500000, "latency": {"avg": 50000}}
+            {
+                "type": "result",
+                "throughput": 500000,
+                "get": {
+                    "count": 500000,
+                    "p50_us": 50,
+                    "p90_us": 89,
+                    "p99_us": 150,
+                    "p999_us": 300,
+                    "p9999_us": 800,
+                    "max_us": 1000,
+                },
+                "set": {
+                    "count": 0,
+                    "p50_us": 0,
+                    "p90_us": 0,
+                    "p99_us": 0,
+                    "p999_us": 0,
+                    "p9999_us": 0,
+                    "max_us": 0,
+                },
+            }
         )
         mock_run.return_value = MagicMock(returncode=0, stdout=result_json, stderr="")
         result = run_cachecannon(command="GET")
@@ -412,16 +490,34 @@ class TestRunCachecannonNewParams:
 
 
 class TestP95Fix:
-    """Test that p95 maps to p95, not p99."""
+    """Test that p99 from cachecannon maps to both p95 and p99 (cachecannon has no p95)."""
 
-    def test_p95_maps_to_p95(self):
+    def test_p99_maps_to_p95_and_p99(self):
         output = json.dumps(
             {
                 "type": "result",
                 "throughput": 1000,
-                "latency": {"p95": 95000, "p99": 99000},
+                "get": {
+                    "count": 1000,
+                    "p50_us": 45,
+                    "p90_us": 89,
+                    "p99_us": 150,
+                    "p999_us": 300,
+                    "p9999_us": 800,
+                    "max_us": 1200,
+                },
+                "set": {
+                    "count": 0,
+                    "p50_us": 0,
+                    "p90_us": 0,
+                    "p99_us": 0,
+                    "p999_us": 0,
+                    "p9999_us": 0,
+                    "max_us": 0,
+                },
             }
         )
         result = _parse_json_output(output, "GET")
-        assert float(result["p95_latency_ms"]) == 0.095
-        assert float(result["p99_latency_ms"]) == 0.099
+        # cachecannon has no p95; we map p99 to both p95 and p99
+        assert float(result["p95_latency_ms"]) == 0.15
+        assert float(result["p99_latency_ms"]) == 0.15

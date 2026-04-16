@@ -500,6 +500,15 @@ class ClientRunner:
                 cmd += ["--seed", str(seed)]
 
             cmd += ["--csv"]
+
+            if self.benchmark_threads is not None:
+                cmd += ["--threads", str(self.benchmark_threads)]
+
+            if not warmup_mode:
+                warmup_val = scenario.get("warmup")
+                if warmup_val is not None and warmup_val > 0:
+                    cmd += ["--warmup", str(warmup_val)]
+
             # Use -t for single-word builtin commands, -- for custom/multi-word
             cmd_str = scenario["command"]
             cmd_upper = cmd_str.split()[0].upper() if cmd_str else ""
