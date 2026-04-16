@@ -44,3 +44,4 @@ datasets/*
 scripts/stackcollapse-perf.pl
 scripts/flamegraph.pl
 .kiro/
+graphify-out/
